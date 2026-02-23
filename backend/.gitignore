@@ -1,0 +1,12 @@
+# Ignore MinIO et fichiers binaires
+minio/
+*.exe
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# VS Code
+.vscode/
