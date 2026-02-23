@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.reclamation import ReclamationResponse
-from app.models import Passager, Reclamation, CarteEmbarquement
+from app.models import Passager, Reclamation, CarteEmbarquement,PieceJointe
 from app.services.file_storage import upload_file
 import secrets
-from typing import Optional
+from typing import List, Optional
 
 router = APIRouter(
     prefix="/api/claims",
@@ -24,8 +24,9 @@ async def create_claim(
     arrival_airport: str = Form(...),
     departure_time: str = Form(...),
     boarding_pass: Optional[UploadFile] = File(None, description="Carte d'embarquement (image ou PDF)"),
+    pieces: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db)
-):
+    ):
     try:
         # 1. Détecter langue
         try:
@@ -64,7 +65,7 @@ async def create_claim(
         file_url = ""
         if boarding_pass:
             file_url = upload_file(boarding_pass, folder="boarding-passes")
-            print(f"✅ Fichier uploadé : {file_url}")
+            print(f" Fichier uploadé : {file_url}")
 
         # 6. Créer carte d'embarquement
         carte = CarteEmbarquement(
@@ -79,6 +80,18 @@ async def create_claim(
         )
         db.add(carte)
         db.commit()
+        #uploader les pirces jointes
+        if pieces:
+            for piece in pieces:
+                piece_url = upload_file(piece, folder="claim-pieces")
+                pj = PieceJointe(
+                    reclamation_id=reclamation.id,
+                    nom_fichier=piece.filename,
+                    type_fichier=piece.content_type,
+                    url_stockage=piece_url
+                )
+                db.add(pj)
+            db.commit()
 
         return ReclamationResponse(
             id=reclamation.id,
