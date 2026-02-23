@@ -1,0 +1,7 @@
+minio/
+*.exe
+venv/
+__pycache__/
+*.pyc
+.env
+.vscode/
