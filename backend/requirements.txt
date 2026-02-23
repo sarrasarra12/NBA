@@ -1,0 +1,16 @@
+# Backend API
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+
+# Validation
+pydantic==2.10.3
+
+# Variables environnement
+python-dotenv==1.0.1
+#Base de données
+sqlalchemy==2.0.27
+psycopg2-binary==2.9.11
+
+# Stockage fichiers
+minio==7.2.5

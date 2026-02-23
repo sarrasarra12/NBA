@@ -1,0 +1,74 @@
+# test_decision_ia.py
+
+from app.core.database import SessionLocal
+from app.models import Passager, Reclamation, DecisionIA
+import secrets
+
+print("🧪 Test DecisionIA...")
+print("=" * 60)
+
+db = SessionLocal()
+
+try:
+    # 1. Passager
+    passager = Passager(
+        nom="Gharbi",
+        prenom="Anis",
+        email="anis@gmail.com",
+        telephone="+216 50 123 789"
+    )
+    db.add(passager)
+    db.commit()
+    db.refresh(passager)
+    print(f"✅ Passager créé (ID: {passager.id})")
+    
+    # 2. Réclamation
+    reclamation = Reclamation(
+        public_token=secrets.token_hex(16),
+        passager_id=passager.id,
+        description="Mon bagage est arrivé complètement détruit !",
+        langue="fr"
+    )
+    db.add(reclamation)
+    db.commit()
+    db.refresh(reclamation)
+    print(f"✅ Réclamation créée (ID: {reclamation.id})")
+    
+    # 3. Décision IA (résultats analyse)
+    decision = DecisionIA(
+        reclamation_id=reclamation.id,
+        categorie_detectee="bagage_endommage",
+        priorite="ELEVEE",
+        resume_auto="Bagage endommagé lors du transport. Passager demande compensation.",
+        reponse_generee="Cher/Chère client(e), nous sommes désolés pour les dommages...",
+        compensation_estimee=300.00,
+        score_confiance=0.89,
+        modifiee_par_agent=False
+    )
+    db.add(decision)
+    db.commit()
+    db.refresh(decision)
+    
+    print(f"✅ Décision IA créée !")
+    print(f"   Catégorie     : {decision.categorie_detectee}")
+    print(f"   Priorité      : {decision.priorite}")
+    print(f"   Compensation  : {decision.compensation_estimee} EUR")
+    print(f"   Confiance     : {decision.score_confiance}")
+    print(f"   Modifiée      : {decision.modifiee_par_agent}")
+    
+    # 4. Test relation
+    print(f"\n🔗 Accès via relation :")
+    print(f"   Réclamation → Décision : {reclamation.decision_ia.categorie_detectee}")
+    print(f"   Décision → Réclamation : #{decision.reclamation.id}")
+    
+    print(f"\n📊 Total décisions : {db.query(DecisionIA).count()}")
+    
+except Exception as e:
+    print(f"❌ Erreur : {e}")
+    import traceback
+    traceback.print_exc()
+    db.rollback()
+finally:
+    db.close()
+
+print("=" * 60)
