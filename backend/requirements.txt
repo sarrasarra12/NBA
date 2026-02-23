@@ -14,3 +14,5 @@ psycopg2-binary==2.9.11
 
 # Stockage fichiers
 minio==7.2.5
+
+email-validator==2.1.0

@@ -1,8 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker , declarative_base
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 #URL CONNEXION POSTGRESQL
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/nouvelair_claims_db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 #crée le moteur de connexion à la base de données 
 engine = create_engine(
