@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.file_storage import init_minio
+from app.services.file_storage import init_minio, upload_logo
 from app.routers import claims
 from contextlib import asynccontextmanager
 
@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialisation de MinIO
     init_minio()
+    upload_logo()
     yield
 
 # Créer l'application FastAPI
@@ -22,11 +23,12 @@ app = FastAPI(
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173","http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 #Router Claims
 app.include_router(claims.router)
 

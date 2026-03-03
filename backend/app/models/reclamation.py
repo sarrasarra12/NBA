@@ -34,11 +34,12 @@ class Reclamation(Base):
     passager_id = Column(Integer, ForeignKey("passagers.id"), nullable=False)
     description = Column(Text, nullable=False)
     langue = Column(String(10), nullable=False, default="fr")
+    pir_reference = Column(String(50), nullable=True) 
     statut = Column(Enum(StatutReclamation), default=StatutReclamation.NOUVELLE, nullable=False)
     priorite = Column(Enum(Priorite), default=Priorite.NORMALE, nullable=False)
+    category = Column(String(100), nullable=False)
     archive_category = Column(Enum(ArchiveCategory), nullable=True) # Catégorie d'archivage
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     closed_at = Column(DateTime(timezone=True), nullable=True)
     #agent_id = Column(Integer, ForeignKey("agents_humains.id"), nullable=True)
 

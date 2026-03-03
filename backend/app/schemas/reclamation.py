@@ -1,6 +1,7 @@
 #avec schema on utilise des régles de validation pour les données d'entrées (formulaire) et sortie API sortanate pour qu "on assure la cohearnce des deonnes 
 # on utilise pydantic pour créer des schémas de validation"
 #Quelqu'un envoi n'importe quoi 
+from typing import Optional
 from pydantic import BaseModel, EmailStr,Field
 from datetime import datetime
 
@@ -18,7 +19,8 @@ class ReclamationCreate(BaseModel):
 
     #description de la reclamation
     description: str = Field(...,min_length=10)
-
+    pir_reference: Optional[str] = Field(None, max_length=50)  
+    type_contact: str = Field(..., pattern="^(PASSAGER|AVOCAT|ASSOCIATION|AGENCE)$")
 #mainetant réponse envoyé au passager apres soumission de rec
 
 class ReclamationResponse(BaseModel):

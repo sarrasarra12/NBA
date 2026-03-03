@@ -1,6 +1,7 @@
+import { Link } from "react-router-dom";
 import heroImg from "../assets/avion.jpg";
-import { useState } from "react";
-
+import { useState, useRef } from "react";
+import logoImg from "../assets/images.png";
 const countries = [
   { code: "+216", flag: "🇹🇳", name: "Tunisie" },
   { code: "+33", flag: "🇫🇷", name: "France" },
@@ -14,6 +15,14 @@ const countries = [
   { code: "+212", flag: "🇲🇦", name: "Maroc" },
   { code: "+213", flag: "🇩🇿", name: "Algérie" },
   { code: "+218", flag: "🇱🇾", name: "Libye" },
+];
+const categories = [
+  { value: "services_aeroportuaires", label: "Services aéroportuaires" },
+  { value: "bagages", label: "Bagages et bagages à main" },
+  { value: "irregularites_vol", label: "Irrégularités de vol" },
+  { value: "services_vol", label: "Services en vol" },
+  { value: "reservation_billetterie", label: "Réservation et Billetterie" },
+  { value: "besoins_speciaux", label: "Besoins spéciaux" },
 ];
 
 const contactTypes = [
@@ -29,6 +38,9 @@ export default function ClaimPage() {
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [typeContact, setTypeContact] = useState("");
   const [liéAuVol, setLiéAuVol] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const [completed, setCompleted] = useState({
     vol: false,
     reclamation: false,
@@ -37,6 +49,7 @@ export default function ClaimPage() {
     passenger_name: "",
     email: "",
     telephone: "",
+    category:"",
     description: "",
     flight_number: "",
     departure_airport: "",
@@ -61,6 +74,66 @@ export default function ClaimPage() {
   const removeAttachment = (index) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
+
+  // ========================================
+  // FONCTIONS CAMÉRA
+  // ========================================
+
+  const openCamera = async () => {
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error('Erreur caméra:', err);
+      alert(" Impossible d'accéder à la caméra");
+      setShowCamera(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    
+    if (!canvas || !video) return;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    
+    canvas.toBlob((blob) => {
+      const capturedFile = new File([blob], "carte-embarquement.jpg", { 
+        type: "image/jpeg" 
+      });
+      setFile(capturedFile);
+      
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach((track) => track.stop());
+      }
+      setShowCamera(false);
+    }, "image/jpeg", 0.95);
+  };
+
+  const closeCamera = () => {
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    setShowCamera(false);
+  };
+
+  // ========================================
+  // FIN FONCTIONS CAMÉRA
+  // ========================================
 
   const checkVolCompleted = () => {
     if (
@@ -96,9 +169,14 @@ export default function ClaimPage() {
     data.append("telephone", `${selectedCountry.code} ${formData.telephone}`);
     data.append("description", formData.description);
     data.append("flight_number", formData.flight_number);
+    data.append("category", formData.category); 
     data.append("departure_airport", formData.departure_airport);
     data.append("arrival_airport", formData.arrival_airport);
     data.append("departure_time", formData.departure_time);
+    if (formData.pir_ref) {
+      data.append('pir_reference', formData.pir_ref);
+    }
+    data.append('type_contact', typeContact);
 
     if (file) {
       data.append("boarding_pass", file);
@@ -122,7 +200,6 @@ export default function ClaimPage() {
         alert(`✅ Réclamation créée !\nToken : ${result.public_token}`);
         console.log("Succès:", result);
 
-        // Réinitialiser le formulaire (SÉCURITÉ)
         setFormData({
           passenger_name: "",
           email: "",
@@ -141,21 +218,24 @@ export default function ClaimPage() {
         setCompleted({ vol: false, reclamation: false });
       } else {
         console.error("Erreur backend:", result);
-        alert(`❌ Erreur : ${JSON.stringify(result.detail, null, 2)}`);
+        alert(` Erreur : ${JSON.stringify(result.detail, null, 2)}`);
       }
     } catch (err) {
       console.error("Erreur réseau:", err);
-      alert("❌ Erreur lors de la soumission");
+      alert(" Erreur lors de la soumission");
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* NAVBAR - RESPONSIVE */}
+      {/* NAVBAR */}
       <nav className="bg-[#0A1628] px-4 sm:px-6 md:px-10 py-3 sm:py-4 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <img src={logoImg}alt="logo nouvelAir" className="h-8 w-auto sm:h-10"/>
         <span className="text-white font-bold text-lg sm:text-xl">
           Nouvel<span className="text-blue-400">Air</span>
         </span>
+        </div>
         <div className="flex gap-2 sm:gap-4">
           {["FR", "العربية", "EN"].map((lang) => (
             <button
@@ -168,7 +248,7 @@ export default function ClaimPage() {
         </div>
       </nav>
 
-      {/* HERO - RESPONSIVE */}
+      {/* HERO */}
       <div className="relative bg-[#0A1628] px-4 sm:px-6 md:px-10 py-10 md:py-14 overflow-hidden">
         <img
           src={heroImg}
@@ -183,52 +263,107 @@ export default function ClaimPage() {
             Déposer une <span className="text-blue-400">réclamation</span>
           </h1>
           <p className="text-gray-400 text-sm">
-            Notre IA analyse votre carte d'embarquement et pré-remplit le
-            formulaire automatiquement.
+            Bénéficiez d'un pré-remplissage du formulaire en scannant votre carte d'embarquement
           </p>
         </div>
       </div>
 
-      {/* FORM - RESPONSIVE */}
+      {/* FORM */}
       <div className="max-w-3xl mx-auto px-4 py-6 sm:py-8 md:py-10 space-y-4 sm:space-y-6">
-        {/* QUESTION OUI/NON */}
-        <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-4 sm:p-6">
-          <p className="text-sm font-bold text-[#0A1628] mb-4">
-            Votre réclamation est-elle liée à un vol particulier ?
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            {[
-              { value: true, label: "Oui" },
-              { value: false, label: "Non" },
-            ].map((option) => (
-              <button
-                key={String(option.value)}
-                type="button"
-                onClick={() => setLiéAuVol(option.value)}
-                className={`flex items-center justify-center sm:justify-start gap-2 px-6 py-3 rounded-xl border-2 font-semibold text-sm transition-all
-                  ${
-                    liéAuVol === option.value
-                      ? "border-blue-500 bg-blue-50 text-blue-600"
-                      : "border-gray-200 text-gray-500 hover:border-blue-300"
-                  }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center
-                  ${liéAuVol === option.value ? "border-blue-500" : "border-gray-300"}`}
-                >
-                  {liéAuVol === option.value && (
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  )}
-                </div>
-                {option.label}
-              </button>
-            ))}
-          </div>
+        
+     {/* QUESTION OUI/NON */}
+<div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-4 sm:p-6">
+  <p className="text-sm font-bold text-[#0A1628] mb-4">
+    Votre réclamation est-elle liée à un vol particulier ?
+  </p>
+  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+    {[
+      { value: true, label: "Oui" },
+      { value: false, label: "Non" },
+    ].map((option) => (
+      <button
+        key={String(option.value)}
+        type="button"
+        onClick={() => setLiéAuVol(option.value)}
+        className={`flex items-center justify-center sm:justify-start gap-2 px-6 py-3 rounded-xl border-2 font-semibold text-sm transition-all
+          ${
+            liéAuVol === option.value
+              ? "border-blue-500 bg-blue-50 text-blue-600"
+              : "border-gray-200 text-gray-500 hover:border-blue-300"
+          }`}
+      >
+        <div
+          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center
+          ${liéAuVol === option.value ? "border-blue-500" : "border-gray-300"}`}
+        >
+          {liéAuVol === option.value && (
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+          )}
         </div>
+        {option.label}
+      </button>
+    ))}
+  </div>
+</div>
 
-        {/* UPLOAD BOARDING PASS - RESPONSIVE */}
+{/* ✅ SECTION SUIVRE UNE RÉCLAMATION */}
+<div className=" bg-gradient-to-br from-blue-200 to-blue-200 rounded-2xl shadow-xl p-6 text-blue-700 hover:shadow-2xl transition-all">
+  
+  {/* Version Desktop */}
+  <div className="hidden sm:flex items-center justify-between gap-6">
+    <div className="flex items-center gap-4">
+      <div className="bg-white/20 backdrop-blur-sm p-4 rounded-2xl">
+        <span className="text-4xl">🔍</span>
+      </div>
+      <div>
+        <h3 className="text-xl font-bold mb-1">
+          Réclamation déjà déposée ?
+        </h3>
+        <p className="text-sm text-blue-900">
+          Suivez l'état de votre réclamation 
+        </p>
+      </div>
+    </div>
+    <Link
+      to="/suivi"
+      className="bg-white text-blue-700 px-6 py-3 rounded-xl font-bold hover:bg-blue-50 hover:scale-105 transition-all shadow-lg flex items-center gap-2 whitespace-nowrap"
+    >
+      <span>Suivre ma réclamation</span>
+      <span className="text-xl">→</span>
+    </Link>
+  </div>
+
+  {/* Version Mobile */}
+  <div className="sm:hidden text-center">
+    <div className="flex justify-center mb-4">
+      <div className="bg-white/20 backdrop-blur-sm p- rounded-2xl inline-block">
+        <span className="text-4xl">🔍</span>
+      </div>
+    </div>
+    <h3 className="text-lg font-bold mb-2">
+      Réclamation déjà déposée ?
+    </h3>
+    <p className="text-sm text-blue-100 mb-4">
+      Suivez son état en temps réel
+    </p>
+    <Link
+      to="/suivi"
+      className="bg-white text-blue-200 px-6 py-3 rounded-xl font-bold hover:bg-blue-50 transition-all shadow-lg inline-flex items-center gap-2"
+    >
+      <span>Suivre ma réclamation</span>
+      <span className="text-xl">→</span>
+    </Link>
+  </div>
+  
+</div>
+        
+        {/* ========================================
+            SECTION CARTE D'EMBARQUEMENT
+            ======================================== */}
         {liéAuVol === true && (
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
+            
+            {/* EN-TÊTE */}
             <div className="bg-blue-50 px-4 sm:px-6 md:px-8 py-4 md:py-5 border-b border-gray-200 flex items-center gap-3 sm:gap-4">
               <div className="w-10 h-10 sm:w-11 sm:h-11 bg-blue-600 rounded-xl flex items-center justify-center text-lg sm:text-xl">
                 📋
@@ -242,37 +377,169 @@ export default function ClaimPage() {
                 </p>
               </div>
             </div>
+            
+            {/* CORPS */}
             <div className="p-4 sm:p-6 md:p-8">
+              
+              {/* Badge */}
               <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-bold px-3 py-1.5 rounded-full mb-4 sm:mb-6">
-                Extraction automatique
+                🤖 Extraction automatique
               </div>
-              <label className="block border-2 border-dashed border-blue-200 rounded-2xl p-6 sm:p-8 md:p-12 text-center bg-blue-50 cursor-pointer hover:border-blue-500 hover:bg-blue-100 transition-all">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white rounded-2xl flex items-center justify-center text-2xl sm:text-3xl mx-auto mb-4 shadow-md">
-                  📸
+
+              {/* Si pas de fichier : afficher les boutons */}
+              {!file ? (
+                <div className="grid grid-cols-2 gap-4">
+                  
+                  {/* BOUTON UPLOADER */}
+                  <label className="block border-2 border-dashed border-blue-200 rounded-2xl p-6 text-center bg-blue-50 cursor-pointer hover:border-blue-500 hover:bg-blue-100 transition-all">
+                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-md">
+                      📁
+                    </div>
+                    <h3 className="text-sm font-bold text-[#0A1628] mb-1">
+                      Importer
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Fichier existant
+                    </p>
+                    <span className="inline-flex items-center gap-1 bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-semibold">
+                      Choisir
+                    </span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      accept=".jpg,.jpeg,.png,.pdf" 
+                      onChange={handleFileChange} 
+                    />
+                  </label>
+                  
+                  {/* BOUTON SCANNER */}
+                  <button
+                    type="button"
+                    onClick={openCamera}
+                    className="block border-2 border-dashed border-blue-200 rounded-2xl p-6 text-center bg-blue-50 cursor-pointer hover:border-blue-500 hover:bg-blue-100 transition-all"
+                  >
+                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-md">
+                      📸
+                    </div>
+                    <h3 className="text-sm font-bold text-[#0A1628] mb-1">
+                      Scanner
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Avec caméra
+                    </p>
+                    <span className="inline-flex items-center gap-1 bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-semibold">
+                      Ouvrir
+                    </span>
+                  </button>
                 </div>
-                <h3 className="text-sm sm:text-base font-bold text-[#0A1628] mb-2">
-                  {file
-                    ? ` ${file.name}`
-                    : "Glissez votre carte d'embarquement ici"}
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-500 mb-4">
-                  JPG, PNG, PDF — Max 10MB
-                </p>
-                <span className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold">
-                  📁 Choisir un fichier
-                </span>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept=".jpg,.jpeg,.png,.pdf"
-                  onChange={handleFileChange}
-                />
-              </label>
+              ) : (
+                /* Fichier sélectionné */
+                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">✅</span>
+                      <div>
+                        <div className="font-semibold text-green-900">
+                          {file.name}
+                        </div>
+                        <div className="text-xs text-green-700">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setFile(null)} 
+                      className="text-red-600 hover:text-red-800 font-bold text-lg"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* ========================================
+                MODAL CAMÉRA
+                ======================================== */}
+            {showCamera && (
+              <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl">
+                  
+                  {/* En-tête modal */}
+                  <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 flex justify-between items-center">
+                    <h3 className="text-white text-xl font-bold">
+                      📷 Scanner la carte d'embarquement
+                    </h3>
+                    <button
+                      onClick={closeCamera}
+                      className="text-white hover:text-gray-200 text-2xl"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Corps modal */}
+                  <div className="p-6">
+                    
+                    {/* Instructions */}
+                    <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                      <div className="text-sm text-blue-800">
+                        <div className="font-semibold mb-1">💡 Instructions :</div>
+                        <ul className="list-disc list-inside space-y-1 text-xs">
+                          <li>Placez la carte bien visible devant la caméra</li>
+                          <li>Assurez-vous d'avoir un bon éclairage</li>
+                          <li>Évitez les reflets et ombres</li>
+                          <li>Cliquez "Capturer" quand vous êtes prêt</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Flux vidéo */}
+                    <div className="relative bg-black rounded-xl overflow-hidden mb-4">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-auto"
+                        style={{ maxHeight: '400px', objectFit: 'contain' }}
+                      />
+                      
+                      {/* Overlay de guidage */}
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div 
+                          className="border-4 border-white border-dashed rounded-lg opacity-50"
+                          style={{ width: '80%', height: '60%' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Canvas caché pour capture */}
+                    <canvas ref={canvasRef} className="hidden" />
+
+                    {/* Boutons d'action */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={closeCamera}
+                        className="flex-1 bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-semibold hover:bg-gray-200 transition"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        onClick={capturePhoto}
+                        className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-bold hover:from-blue-700 hover:to-blue-800 transition shadow-lg"
+                      >
+                        📸 Capturer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* INFOS VOL - RESPONSIVE */}
+        {/* INFOS VOL */}
         {liéAuVol === true && (
           <div
             className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all ${completed.vol ? "border-green-400" : "border-gray-200"}`}
@@ -328,7 +595,7 @@ export default function ClaimPage() {
                 {
                   label: "Réf PIR",
                   name: "pir_ref",
-                  placeholder: "Ex: TUNBJ12345",
+                  placeholder: "Ex: ",
                   required: false,
                 },
               ].map((field) => (
@@ -352,7 +619,7 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* RÉCLAMATION - RESPONSIVE */}
+        {/* RÉCLAMATION */}
         {liéAuVol !== null && (
           <div
             className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all ${completed.reclamation ? "border-green-400" : "border-gray-200"}`}
@@ -380,6 +647,7 @@ export default function ClaimPage() {
               </div>
             </div>
             <div className="p-4 sm:p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+              
               {/* TYPE DE CONTACT */}
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
@@ -432,8 +700,11 @@ export default function ClaimPage() {
                 </div>
               ))}
 
+              {/* TÉLÉPHONE + CATÉGORIE (côte à côte) */}
+<div className="col-span-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+  
               {/* TÉLÉPHONE */}
-              <div className="col-span-1 sm:col-span-2">
+              <div>
                 <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
                   Téléphone <span className="text-red-500">*</span>
                 </label>
@@ -464,6 +735,29 @@ export default function ClaimPage() {
                   />
                 </div>
               </div>
+
+              {/* CATÉGORIE */}
+              <div>
+                <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
+                  Catégorie <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  onBlur={checkReclamationCompleted}
+                  className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-50 transition-all"
+                >
+                  <option value="">Sélectionner une catégorie...</option>
+                  {categories.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+            </div>
 
               {/* DESCRIPTION */}
               <div className="col-span-1 sm:col-span-2">
@@ -537,7 +831,7 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* SUBMIT - RESPONSIVE */}
+        {/* SUBMIT */}
         {liéAuVol !== null && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:justify-between mb-4 sm:mb-5">
@@ -557,11 +851,11 @@ export default function ClaimPage() {
             </div>
             <div className="text-center border-t border-gray-100 pt-4">
               <p className="text-xs sm:text-sm text-gray-500">
-                Après soumission, vous recevrez un{" "}
+                Après soumission, vous recevrez{" "}
                 <span className="font-semibold text-[#0A1628]">
-                  token unique
+                  un email
                 </span>{" "}
-                par email pour suivre l'état de votre réclamation en temps réel.
+                et vous pourrez suivre l'état de votre réclamation .
               </p>
             </div>
           </div>

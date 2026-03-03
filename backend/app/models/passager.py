@@ -1,6 +1,15 @@
+import enum
+from sqlalchemy import Column, Integer, String, Enum as SQLEnum
 from sqlalchemy import Column , Integer , String 
 from app.core.database import Base
 from sqlalchemy.orm import relationship
+
+class TypeContact(enum.Enum):
+    PASSAGER = "PASSAGER"
+    AVOCAT = "AVOCAT"
+    ASSOCIATION = "ASSOCIATION"
+    AGENCE = "AGENCE"
+
 class Passager(Base):
     __tablename__ = "passagers"
 
@@ -9,6 +18,8 @@ class Passager(Base):
     prenom = Column(String(255), index=True)
     email = Column(String(255),  index=True,nullable=False)
     telephone = Column(String(50), nullable=False)
+    type_contact = Column(SQLEnum(TypeContact), nullable=False, default=TypeContact.PASSAGER)
+
 
     # Relation vers réclamations
     reclamations = relationship("Reclamation", back_populates="passager")

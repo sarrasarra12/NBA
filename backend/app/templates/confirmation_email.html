@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial; padding: 20px;">
+    <h1>✅ Réclamation bien reçue !</h1>
+    <p>Bonjour {{ passenger_name }},</p>
+    <p>Votre réclamation a été enregistrée avec succès.</p>
+    
+    <div style="background: #f0f0f0; padding: 15px; margin: 20px 0;">
+        <p><strong>Numéro de suivi :</strong> {{ token }}</p>
+        <p><strong>Date :</strong> {{ date_soumission }}</p>
+        <p><strong>Catégorie :</strong> {{ category }}</p>
+    </div>
+    
+    <p>
+        <a href="{{ tracking_url }}" style="background: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Suivre ma réclamation
+        </a>
+    </p>
+    
+    <p>Cordialement,<br>L'équipe NouvelAir</p>
+<img src="{{ logo_url }}" alt="Logo NouvelAir" style="width: 150px; margin-top: 20px;">
+</body>
+</html>

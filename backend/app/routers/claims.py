@@ -6,7 +6,11 @@ from app.schemas.reclamation import ReclamationResponse
 from app.models import Passager, Reclamation, CarteEmbarquement,PieceJointe
 from app.services.file_storage import upload_file
 import secrets
+from pydantic import EmailStr
+from app.models.passager import TypeContact
 from typing import List, Optional
+from app.services.email_service import send_confirmation_email
+
 
 router = APIRouter(
     prefix="/api/claims",
@@ -23,6 +27,9 @@ async def create_claim(
     departure_airport: str = Form(...),
     arrival_airport: str = Form(...),
     departure_time: str = Form(...),
+    category: str = Form(...),
+    pir_reference: Optional[str] = Form(None), 
+    type_contact: str = Form(...),
     boarding_pass: Optional[UploadFile] = File(None, description="Carte d'embarquement (image ou PDF)"),
     pieces: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db)
@@ -30,7 +37,7 @@ async def create_claim(
     try:
         # 1. Détecter langue
         try:
-            from langdetect import detect
+            
             langue = detect(description)
         except:
             langue = "fr"
@@ -55,7 +62,8 @@ async def create_claim(
             public_token=token,
             passager_id=passager.id,
             description=description,
-            langue=langue
+            langue=langue,
+            category=category,
         )
         db.add(reclamation)
         db.commit()
@@ -93,12 +101,26 @@ async def create_claim(
                 db.add(pj)
             db.commit()
 
+        #  ENVOYER L'EMAIL DE CONFIRMATION (avant c éte juste pop up dans ke front)
+        try:
+            await send_confirmation_email(
+                recipient_email=email,
+                passenger_name=passenger_name,
+                token=token,
+                category=category,  
+                created_at=reclamation.created_at
+            )
+            print(f"✅ Email de confirmation envoyé à {email}")
+        except Exception as e:
+            print(f" Erreur envoi email (réclamation créée quand même) : {e}")
+        
+        # Retourner la réponse
         return ReclamationResponse(
             id=reclamation.id,
             public_token=token,
             statut=reclamation.statut.value,
             created_at=reclamation.created_at,
-            message="Réclamation créée avec succès",
+            message="Réclamation créée avec succès. Vérifiez votre email.",
             suivi_url=f"http://localhost:3000/suivi?token={token}"
         )
 
@@ -106,17 +128,28 @@ async def create_claim(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.get("/track/{token}")
+async def track_claim(token: str, db: Session = Depends(get_db)):
 
-@router.get("/{token}")
-async def get_claim_status(token: str, db: Session = Depends(get_db)):
+    # Permet au passager de suivre sa réclamation avec son token
+    
     reclamation = db.query(Reclamation).filter(
         Reclamation.public_token == token
     ).first()
+    
     if not reclamation:
-        raise HTTPException(status_code=404, detail="Token invalide")
+        raise HTTPException(
+            status_code=404, 
+            detail="Réclamation introuvable. Vérifiez votre token."
+        )
+    
     return {
+        "public_token": reclamation.public_token,
         "statut": reclamation.statut.value,
-        "created_at": reclamation.created_at
+        "priorite": reclamation.priorite.value if reclamation.priorite else "NORMALE",
+        "category": reclamation.category if reclamation.category else "Non spécifiée",
+        "created_at": reclamation.created_at.isoformat(),
+        "reponse": None  # Pour l'instant, pas de réponse (Sprint 2/3)
     }
 @router.post("/upload-boarding-pass")
 async def upload_boarding_pass(

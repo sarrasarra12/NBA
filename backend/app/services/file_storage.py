@@ -49,3 +49,19 @@ def upload_file(file: UploadFile, folder: str) -> str:
     except S3Error as e:
         print(f"Erreur lors de l'upload du fichier: {e}")
         raise Exception("Erreur lors de l'upload du fichier")
+def upload_logo():
+    logo_path = "app/templates/logo.png"
+    file_stat = os.stat(logo_path)
+    
+    with open(logo_path, "rb") as logo_file:
+        MINIO_CLIENT.put_object(
+            bucket_name=BUCKET_NAME,
+            object_name="assets/logo.png",
+            data=logo_file,
+            length=file_stat.st_size,
+            content_type="image/png"
+        )
+    
+    logo_url = f"http://{MINIO_ENDPOINT}/{BUCKET_NAME}/assets/logo.png"
+    print(f"✅ Logo uploadé : {logo_url}")
+    return logo_url
