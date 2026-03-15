@@ -3,19 +3,31 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.reclamation import ReclamationResponse
-from app.models import Passager, Reclamation, CarteEmbarquement,PieceJointe
+from app.models import Passager, Reclamation, CarteEmbarquement, PieceJointe
 from app.services.file_storage import upload_file
 import secrets
-from pydantic import EmailStr
 from app.models.passager import TypeContact
 from typing import List, Optional
 from app.services.email_service import send_confirmation_email
+from app.services.amadeus_service import search_flights
+from pydantic import BaseModel
+import os
+import shutil
+from app.services.ocr_service import extract_boarding_pass_info
+from app.services.pnr_service import verify_pnr
+from app.schemas.reclamation import PNRVerifyRequest, FlightSearchRequest
+
+
+class PNRVerifyRequest(BaseModel):
+    pnr_code: str
+
 
 
 router = APIRouter(
-    prefix="/api/claims",
-    tags=["Claims"]
+    prefix="/api/claims", #toutes route commmence par /api/claims 
+    tags=["Claims"]  #groupe dans doc
 )
+
 
 @router.post("/", response_model=ReclamationResponse, status_code=status.HTTP_201_CREATED)
 async def create_claim(
@@ -26,23 +38,42 @@ async def create_claim(
     flight_number: str = Form(...),
     departure_airport: str = Form(...),
     arrival_airport: str = Form(...),
-    departure_time: str = Form(...),
+    departure_date: str = Form(...),
     category: str = Form(...),
-    pir_reference: Optional[str] = Form(None), 
+    pir_reference: Optional[str] = Form(None),
     type_contact: str = Form(...),
-    boarding_pass: Optional[UploadFile] = File(None, description="Carte d'embarquement (image ou PDF)"),
-    pieces: List[UploadFile] = File(default=[]),
-    db: Session = Depends(get_db)
-    ):
-    try:
-        # 1. Détecter langue
-        try:
-            
-            langue = detect(description)
-        except:
-            langue = "fr"
+    pnr_code: str = Form(...),   
+    boarding_pass: Optional[UploadFile] = File(None),
+    pieces: List[UploadFile] = File(default=[]),#liste
+    db: Session = Depends(get_db)  #fastapi crée et ferme la sesion auto
+):
+    # Vérification PNR AVANT tout traitement
+    
+    if pnr_code:
+        pnr_result = verify_pnr(db, pnr_code)
 
-        # 2. Séparer nom et prénom
+        if not pnr_result.get("exists"):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "alert": f"PNR '{pnr_code.upper()}' introuvable, Vérifiez votre billet."
+                }
+            )
+
+        # Vérifier cohérence vol + PNR (si le pnr n'appartient a cette vol )
+        if pnr_result.get("flight_number", "").upper() != flight_number.upper():
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "alert": f"Le PNR '{pnr_code.upper()}' ne correspond pas au vol {flight_number.upper()}."
+                }
+            )
+
+    # Création de la réclamation
+    try:
+        
+
+    # 2. Séparer nom et prénom
         parts = passenger_name.strip().split()
         if len(parts) >= 2:
             nom = parts[-1]
@@ -57,12 +88,11 @@ async def create_claim(
         db.flush()
 
         # 4. Créer réclamation
-        token = secrets.token_hex(16)
+        token = secrets.token_hex(16)  #générer un token auto 
         reclamation = Reclamation(
             public_token=token,
             passager_id=passager.id,
             description=description,
-            langue=langue,
             category=category,
         )
         db.add(reclamation)
@@ -73,7 +103,7 @@ async def create_claim(
         file_url = ""
         if boarding_pass:
             file_url = upload_file(boarding_pass, folder="boarding-passes")
-            print(f" Fichier uploadé : {file_url}")
+            print(f"✅ Fichier uploadé : {file_url}")
 
         # 6. Créer carte d'embarquement
         carte = CarteEmbarquement(
@@ -83,12 +113,13 @@ async def create_claim(
             vol=flight_number,
             departure_airport=departure_airport,
             destination_airport=arrival_airport,
-            departure_time=departure_time,
+            departure_date=departure_date,
             ocr_confidence=None
         )
         db.add(carte)
         db.commit()
-        #uploader les pirces jointes
+
+        # 7. Upload pièces jointes
         if pieces:
             for piece in pieces:
                 piece_url = upload_file(piece, folder="claim-pieces")
@@ -101,20 +132,19 @@ async def create_claim(
                 db.add(pj)
             db.commit()
 
-        #  ENVOYER L'EMAIL DE CONFIRMATION (avant c éte juste pop up dans ke front)
+        # 8. Envoyer email de confirmation
         try:
             await send_confirmation_email(
                 recipient_email=email,
                 passenger_name=passenger_name,
                 token=token,
-                category=category,  
+                category=category,
                 created_at=reclamation.created_at
             )
             print(f"✅ Email de confirmation envoyé à {email}")
         except Exception as e:
-            print(f" Erreur envoi email (réclamation créée quand même) : {e}")
-        
-        # Retourner la réponse
+            print(f"⚠️ Erreur envoi email (réclamation créée quand même) : {e}")
+
         return ReclamationResponse(
             id=reclamation.id,
             public_token=token,
@@ -124,39 +154,80 @@ async def create_claim(
             suivi_url=f"http://localhost:3000/suivi?token={token}"
         )
 
+    except HTTPException:
+        # ✅ Laisser passer les HTTPException sans les wrapper dans un 400
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/track/{token}")
 async def track_claim(token: str, db: Session = Depends(get_db)):
-
-    # Permet au passager de suivre sa réclamation avec son token
-    
     reclamation = db.query(Reclamation).filter(
         Reclamation.public_token == token
     ).first()
-    
+
     if not reclamation:
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail="Réclamation introuvable. Vérifiez votre token."
         )
-    
+
     return {
         "public_token": reclamation.public_token,
         "statut": reclamation.statut.value,
         "priorite": reclamation.priorite.value if reclamation.priorite else "NORMALE",
         "category": reclamation.category if reclamation.category else "Non spécifiée",
         "created_at": reclamation.created_at.isoformat(),
-        "reponse": None  # Pour l'instant, pas de réponse (Sprint 2/3)
+        "reponse": None
     }
-@router.post("/upload-boarding-pass")
-async def upload_boarding_pass(
-    boarding_pass: UploadFile = File(...)
+
+
+@router.post("/extract-boarding-pass")
+async def extract_boarding_pass(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
 ):
     try:
-        file_url = upload_file(boarding_pass, folder="boarding-passes")
-        return {"file_url": file_url, "message": "Fichier uploadé avec succès"}
+        temp_path = f"uploads/temp_{file.filename}"
+        os.makedirs("uploads", exist_ok=True)
+
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        result = extract_boarding_pass_info(temp_path, visualize=True)
+        os.remove(temp_path)
+        return result
+
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/verify-pnr")
+async def verify_pnr_endpoint(
+    request: PNRVerifyRequest,
+    db: Session = Depends(get_db)
+):
+    result = verify_pnr(db, request.pnr_code)
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=404,
+            detail=result.get("error")
+        )
+
+    return result
+#essai de amadeux pour l api search flight 
+@router.post("/amadeus/search-flights")
+async def amadeus_search_flights(request: FlightSearchRequest):
+    result = search_flights(
+        origin=request.origin,
+        destination=request.destination,
+        date=request.date
+    )
+
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+
+    return result

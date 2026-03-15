@@ -45,6 +45,7 @@ export default function ClaimPage() {
     vol: false,
     reclamation: false,
   });
+
   const [formData, setFormData] = useState({
     passenger_name: "",
     email: "",
@@ -54,18 +55,22 @@ export default function ClaimPage() {
     flight_number: "",
     departure_airport: "",
     arrival_airport: "",
-    departure_time: "",
+    departure_date: "",
     pir_ref: "",
+    pnr_code:"",
   });
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
-
+ const handleFileChange = (e) => {
+  const selectedFile = e.target.files[0];
+  if (selectedFile) {
+    setFile(selectedFile);
+    extractBoardingPassData(selectedFile);  
+  }
+};
   const handleAttachments = (e) => {
     const newFiles = Array.from(e.target.files);
     setAttachments((prev) => [...prev, ...newFiles]);
@@ -74,6 +79,74 @@ export default function ClaimPage() {
   const removeAttachment = (index) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
+  // ici on implemente l'extraction 
+  //
+// Fonction utilitaire pour convertir la date OCR en format HTML <input type="date">
+// Convertit date OCR (01APR) en YYYY-MM-DD
+// OCR renvoie "01 AVR" → on transforme en "2025-04-01"
+const convertOcrDateToInput = (ocrDate) => {
+ const months = {
+  JAN: "01", FEB: "02", MAR: "03", APR: "04", MAY: "05",
+  JUN: "06", JUL: "07", AUG: "08", SEP: "09", OCT: "10",
+  NOV: "11", DEC: "12"
+};
+
+  if (!ocrDate) return null;
+
+  const day = ocrDate.slice(0,2);
+  const monthStr = ocrDate.slice(2,5).toUpperCase();
+  const month = months[monthStr] || "01";
+  const year = 2025; // 
+
+  return `${year}-${month}-${day}`;
+};
+  // ========================================
+// FONCTION EXTRACTION OCR
+// ========================================
+const extractBoardingPassData = async (uploadedFile) => {
+  if (!uploadedFile) return;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', uploadedFile);
+    alert('📥 Attendez quelques secondes pour l extraction  !')
+    console.log('📤 Envoi au backend pour OCR...');
+
+    const response = await fetch('http://localhost:8000/api/claims/extract-boarding-pass', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    console.log('📥 Réponse OCR:', data);
+    if (data.success) {
+      // ✅ PRÉ-REMPLIR LE FORMULAIRE
+      setFormData(prev => ({
+        ...prev,
+        flight_number: data.flight_number || prev.flight_number,
+        departure_airport: data.departure_airport || prev.departure_airport,
+        arrival_airport: data.arrival_airport || prev.arrival_airport,
+        departure_date: convertOcrDateToInput(data.departure_date) || prev.departure_date,
+        passenger_name:data.passenger_name || prev.passenger_name
+       
+      }));
+
+      alert('✅ Carte d\'embarquement analysée avec succès !');
+      
+      // Recheck completion
+      setTimeout(() => {
+        checkVolCompleted();
+        checkReclamationCompleted();
+      }, 100);
+    } else {
+      alert('⚠️ Extraction partielle. Vérifiez les champs.');
+      console.warn('Erreur OCR:', data.error);
+    }
+  } catch (error) {
+    console.error('❌ Erreur extraction:', error);
+    alert('❌ Erreur lors de l\'analyse de la carte');
+  }
+};
+
 
   // ========================================
   // FONCTIONS CAMÉRA
@@ -101,28 +174,29 @@ export default function ClaimPage() {
     }
   };
 
-  const capturePhoto = () => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
+const capturePhoto = () => {
+  const canvas = canvasRef.current;
+  const video = videoRef.current;
+  
+  if (!canvas || !video) return;
+  
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  
+  canvas.toBlob((blob) => {
+    const capturedFile = new File([blob], "carte-embarquement.jpg", { 
+      type: "image/jpeg" 
+    });
+    setFile(capturedFile);
+    extractBoardingPassData(capturedFile);  // ← AJOUTE CETTE LIGNE
     
-    if (!canvas || !video) return;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
-    
-    canvas.toBlob((blob) => {
-      const capturedFile = new File([blob], "carte-embarquement.jpg", { 
-        type: "image/jpeg" 
-      });
-      setFile(capturedFile);
-      
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach((track) => track.stop());
-      }
-      setShowCamera(false);
-    }, "image/jpeg", 0.95);
-  };
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    setShowCamera(false);
+  }, "image/jpeg", 0.95);
+};;
 
   const closeCamera = () => {
     if (videoRef.current?.srcObject) {
@@ -138,7 +212,7 @@ export default function ClaimPage() {
   const checkVolCompleted = () => {
     if (
       formData.flight_number &&
-      formData.departure_time &&
+      formData.departure_date&&
       formData.departure_airport &&
       formData.arrival_airport
     ) {
@@ -161,7 +235,7 @@ export default function ClaimPage() {
       setCompleted((prev) => ({ ...prev, reclamation: false }));
     }
   };
-
+  
   const handleSubmit = async () => {
     const data = new FormData();
     data.append("passenger_name", formData.passenger_name);
@@ -172,7 +246,7 @@ export default function ClaimPage() {
     data.append("category", formData.category); 
     data.append("departure_airport", formData.departure_airport);
     data.append("arrival_airport", formData.arrival_airport);
-    data.append("departure_time", formData.departure_time);
+    data.append("departure_date", formData.departure_date);
     if (formData.pir_ref) {
       data.append('pir_reference', formData.pir_ref);
     }
@@ -186,6 +260,10 @@ export default function ClaimPage() {
       attachments.forEach((attachment) => {
         data.append("pieces", attachment);
       });
+
+    }
+    if (formData.pnr_code) {
+      data.append("pnr_code", formData.pnr_code.toUpperCase());
     }
 
     try {
@@ -208,7 +286,7 @@ export default function ClaimPage() {
           flight_number: "",
           departure_airport: "",
           arrival_airport: "",
-          departure_time: "",
+          departure_date: "",
           pir_ref: "",
         });
         setFile(null);
@@ -216,6 +294,7 @@ export default function ClaimPage() {
         setLiéAuVol(null);
         setTypeContact("");
         setCompleted({ vol: false, reclamation: false });
+
       } else {
         console.error("Erreur backend:", result);
         alert(` Erreur : ${JSON.stringify(result.detail, null, 2)}`);
@@ -225,6 +304,7 @@ export default function ClaimPage() {
       alert(" Erreur lors de la soumission");
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -576,7 +656,7 @@ export default function ClaimPage() {
                 },
                 {
                   label: "Date du vol",
-                  name: "departure_time",
+                  name: "departure_date",
                   type: "date",
                   required: true,
                 },
@@ -593,11 +673,19 @@ export default function ClaimPage() {
                   required: true,
                 },
                 {
+                  
+                  label: "PNR",
+                  name: "pnr_code",
+                  placeholder: "Ex: 6BDDF5L ",
+                  required: true,
+
+                },
+                  {
                   label: "Réf PIR",
                   name: "pir_ref",
                   placeholder: "Ex: ",
                   required: false,
-                },
+                }
               ].map((field) => (
                 <div key={field.name}>
                   <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">

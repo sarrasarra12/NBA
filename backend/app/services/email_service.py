@@ -16,7 +16,6 @@ def get_env_or_error(key: str) -> str:
     return value
 
 # Configuration SMTP
-
 try:
     conf = ConnectionConfig(
         MAIL_USERNAME=get_env_or_error("MAIL_USERNAME"),
@@ -32,7 +31,7 @@ try:
     print(f"✅ Configuration email chargée pour {os.getenv('MAIL_USERNAME')}")
 except ValueError as e:
     print(str(e))
-    print("⚠️ Vérifie que le fichier .env existe dans backend/ et contient MAIL_USERNAME et MAIL_PASSWORD")
+    print("⚠️ Vérifie que le fichier .env existe ")
     # Configuration par défaut pour éviter le crash
     conf = ConnectionConfig(
         MAIL_USERNAME="",

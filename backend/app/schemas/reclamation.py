@@ -4,7 +4,15 @@
 from typing import Optional
 from pydantic import BaseModel, EmailStr,Field
 from datetime import datetime
+class PNRVerifyRequest(BaseModel):
+    pnr_code: str
 
+
+class FlightSearchRequest(BaseModel):
+    origin: str
+    destination: str
+    date: str
+    adults: int = 1
 class ReclamationCreate(BaseModel):
     #info about vol
     passenger_name: str = Field(...,min_length=2, max_length=255)
