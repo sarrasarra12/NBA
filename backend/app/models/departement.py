@@ -4,10 +4,9 @@ from app.core.database import Base
 import enum 
 
 class NomDepartement(enum.Enum):
-    BAGAGE =" BAGAGE"
+    BAGAGE ="BAGAGE"
     CALL_CENTRE ="CALL_CENTRE"
     SERVICE_CLIENT ="SERVICE_CLIENT"
-
 class Departement (Base):
     __tablename__ = "departements"
 
@@ -18,5 +17,5 @@ class Departement (Base):
 
     #relations 
     agents = relationship("AgentHumain", back_populates="departement")
-def __repr__(self):
-    return f"<Departement id={self.id} nom={self.nom}>"
+    def __repr__(self):
+        return f"<Departement id={self.id} nom={self.nom}>"

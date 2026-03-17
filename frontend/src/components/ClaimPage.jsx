@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import heroImg from "../assets/avion.jpg";
 import { useState, useRef } from "react";
 import logoImg from "../assets/images.png";
+
 const countries = [
   { code: "+216", flag: "🇹🇳", name: "Tunisie" },
   { code: "+33", flag: "🇫🇷", name: "France" },
@@ -17,12 +18,12 @@ const countries = [
   { code: "+218", flag: "🇱🇾", name: "Libye" },
 ];
 const categories = [
-  { value: "services_aeroportuaires", label: "Services aéroportuaires" },
-  { value: "bagages", label: "Bagages et bagages à main" },
-  { value: "irregularites_vol", label: "Irrégularités de vol" },
-  { value: "services_vol", label: "Services en vol" },
-  { value: "reservation_billetterie", label: "Réservation et Billetterie" },
-  { value: "besoins_speciaux", label: "Besoins spéciaux" },
+  { value: "BAGAGE", label: "Bagages" },
+{ value: "RETARD_VOL", label: "Retard de vol" },
+{ value: "ANNULATION", label: "Annulation" },
+{ value: "REMBOURSEMENT", label: "Remboursement" },
+{ value: "SERVICE_AEROPORT", label: "Services aéroportuaires" },
+{ value: "AUTRE", label: "Autre" },
 ];
 
 const contactTypes = [

@@ -4,15 +4,7 @@
 from typing import Optional
 from pydantic import BaseModel, EmailStr,Field
 from datetime import datetime
-class PNRVerifyRequest(BaseModel):
-    pnr_code: str
 
-
-class FlightSearchRequest(BaseModel):
-    origin: str
-    destination: str
-    date: str
-    adults: int = 1
 class ReclamationCreate(BaseModel):
     #info about vol
     passenger_name: str = Field(...,min_length=2, max_length=255)
@@ -42,5 +34,23 @@ class ReclamationResponse(BaseModel):
     class config:
         from_attributes = True
 
-   
+# Ajoute ces deux classes à la fin du fichier
+
+class PNRVerifyRequest(BaseModel):
+    pnr_code: str = Field(..., min_length=3, max_length=20)
+    # code PNR envoyé pour vérification
+    # ex: "ABC123"
+
+class FlightSearchRequest(BaseModel):
+    origin: str = Field(..., min_length=3, max_length=3)
+    # code IATA aéroport départ
+    # ex: "CDG"
+
+    destination: str = Field(..., min_length=3, max_length=3)
+    # code IATA aéroport arrivée
+    # ex: "TUN"
+
+    date: str = Field(..., min_length=8, max_length=10)
+    # date au format YYYY-MM-DD
+    # ex: "2026-06-01"
    
