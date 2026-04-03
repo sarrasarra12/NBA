@@ -1,6 +1,8 @@
 from app.core.database import SessionLocal
 from app.models.reservation import Reservation
 from datetime import datetime, time
+from app.models.category import Category
+from app.models.departement import Departement
 import uuid
 
 print(" Test insertion Reservation...")

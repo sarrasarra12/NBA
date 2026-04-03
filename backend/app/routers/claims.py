@@ -9,13 +9,15 @@ import secrets
 from app.models.passager import TypeContact
 from typing import List, Optional
 from app.services.email_service import send_confirmation_email
-from app.services.amadeus_service import search_flights
 from pydantic import BaseModel
 import os
 import shutil
 from app.services.ocr_service import extract_boarding_pass_info
 from app.services.pnr_service import verify_pnr
 from app.schemas.reclamation import PNRVerifyRequest, FlightSearchRequest
+from app.services.routing_service import get_agent_by_category
+from app.services.priority_service import calculate_priority
+from app.models.category import Category
 
 
 class PNRVerifyRequest(BaseModel):
@@ -98,13 +100,27 @@ async def create_claim(
         db.add(reclamation)
         db.commit()
         db.refresh(reclamation)
-
+        #routing vers bon agent 
+        agent = get_agent_by_category(db , category)
+        if agent :
+                reclamation.agent_id=agent.id
+                db.commit()
+                print(f"✅ Routée vers {agent.email}")
+        priorite=calculate_priority(
+            type_contact=type_contact,
+            category=category 
+        )
+        reclamation.priorite=priorite
+        db.commit()
         # 5. Upload boarding pass sur MinIO
         file_url = ""
         if boarding_pass:
-            file_url = upload_file(boarding_pass, folder="boarding-passes")
-            print(f"✅ Fichier uploadé : {file_url}")
-
+            try:
+                file_url = upload_file(boarding_pass, folder="boarding-passes")
+                print(f"✅ Fichier uploadé : {file_url}")
+            except Exception as e:
+                print(f"⚠️ MinIO non disponible : {e}")
+                file_url = ""
         # 6. Créer carte d'embarquement
         carte = CarteEmbarquement(
             reclamation_id=reclamation.id,
@@ -131,6 +147,7 @@ async def create_claim(
                 )
                 db.add(pj)
             db.commit()
+            
 
         # 8. Envoyer email de confirmation
         try:
@@ -160,7 +177,6 @@ async def create_claim(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @router.get("/track/{token}")
 async def track_claim(token: str, db: Session = Depends(get_db)):
@@ -219,15 +235,8 @@ async def verify_pnr_endpoint(
 
     return result
 #essai de amadeux pour l api search flight 
-@router.post("/amadeus/search-flights")
-async def amadeus_search_flights(request: FlightSearchRequest):
-    result = search_flights(
-        origin=request.origin,
-        destination=request.destination,
-        date=request.date
-    )
 
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error"))
-
-    return result
+@router.get("/categories")
+async def get_categories_public(db: Session = Depends(get_db)):
+    categories = db.query(Category).all()
+    return [{"id": c.id, "nom": c.nom, "description": c.description} for c in categories]

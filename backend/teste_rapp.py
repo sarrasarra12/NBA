@@ -14,11 +14,12 @@ ocr = PaddleOCR(use_angle_cls=True, lang='en')
 # 2️⃣ Lecture + prétraitement de l'image
 # ---------------------------------------------------
 
-image_path = "carte2.jpg"
+image_path = "embrq.jpg"
 
 image = cv2.imread(image_path)
 
 # conversion en niveaux de gris
+
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 # améliore le contraste

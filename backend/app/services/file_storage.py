@@ -4,7 +4,7 @@ from fastapi import UploadFile
 import uuid
 import os
 from dotenv import load_dotenv
-
+import json
 load_dotenv()
 
 # configuration de minio
@@ -18,6 +18,18 @@ MINIO_CLIENT = Minio(
     secret_key=MINIO_SECRET_KEY,
     secure=False
 )
+policy = {
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect"   : "Allow",
+        "Principal": {"AWS": ["*"]},
+        "Action"   : ["s3:GetObject"],
+        "Resource" : ["arn:aws:s3:::claims-files/*"]
+    }]
+}
+
+MINIO_CLIENT .set_bucket_policy("claims-files", json.dumps(policy))
+print("✅ Bucket claims-files rendu public !")
 BUCKET_NAME = "claims-files"
 
 # inistialiser le bucket
@@ -25,12 +37,25 @@ def init_minio():
     try:
         if not MINIO_CLIENT.bucket_exists(BUCKET_NAME):
             MINIO_CLIENT.make_bucket(BUCKET_NAME)
-            print(f"Bucket '{BUCKET_NAME}' créé avec succès.")
+            print(f"Bucket '{BUCKET_NAME}' créé.")
         else:
             print(f"Bucket '{BUCKET_NAME}' existe déjà.")
-    except S3Error as e:
-        print(f"Erreur lors de l'initialisation de MinIO: {e}")
 
+        # ✅ Rendre le bucket public
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect"   : "Allow",
+                "Principal": {"AWS": ["*"]},
+                "Action"   : ["s3:GetObject"],
+                "Resource" : [f"arn:aws:s3:::{BUCKET_NAME}/*"]
+            }]
+        }
+        MINIO_CLIENT.set_bucket_policy(BUCKET_NAME, json.dumps(policy))
+        print("✅ Bucket public !")
+
+    except S3Error as e:
+        print(f"Erreur MinIO: {e}")
 # uploader fichier
 def upload_file(file: UploadFile, folder: str) -> str:
     try:

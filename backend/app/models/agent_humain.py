@@ -26,8 +26,7 @@ class AgentHumain(Base):
 
     # Relations
     departement     = relationship("Departement", back_populates="agents")
-    reponses        = relationship("Reponse", back_populates="agent")
-    reclamations_assignees = relationship("Reclamation", back_populates="agent")  # ← ajoute ça
+    reclamations_assignees = relationship("Reclamation", back_populates="agent")  
 
     def __repr__(self):
         return f"<AgentHumain id={self.id} email={self.email} role={self.role}>"
