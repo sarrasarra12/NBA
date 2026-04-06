@@ -46,7 +46,6 @@ class DepartementResponse(BaseModel):
     nom        : str
     responsable: Optional[str] = None
     email      : Optional[str] = None
-    category_id: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -191,7 +190,6 @@ async def create_departement(
         nom         = data.nom,
         responsable = data.responsable,
         email       = data.email,
-        category_id = data.category_id
     )
     db.add(dept)
     db.commit()

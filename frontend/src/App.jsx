@@ -19,7 +19,7 @@ function App() {
         <Route path="/suivi" element={<TrackingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin" element={<Admin />} />
-        <Route path="/agent/Bagage" element={<AgBagage />} />
+        <Route path="/agent/bagage" element={<AgBagage />} />
         <Route path="/agent/callcenter" element={<Ag_callcenter />} />
         <Route path="/agent/service"  element={<AgService_client />} />
         <Route path="/admin/agents" element={<GestionAgents />} />

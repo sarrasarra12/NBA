@@ -10,8 +10,7 @@ class Departement(Base):
     nom         = Column(String, nullable=False)
     responsable = Column(String, nullable=True)
     email       = Column(String, nullable=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
 
-    # ← string au lieu de classe directe
-    category = relationship("Category", back_populates="departement")
-    agents   = relationship("AgentHumain", back_populates="departement")
+    # ← un département a plusieurs catégories !
+    categories = relationship("Category", back_populates="departement")
+    agents     = relationship("AgentHumain", back_populates="departement")

@@ -38,30 +38,34 @@ def extract_with_gemma(image_path: str) -> Dict:
         img = Image.open(image_path)
         
         # Prompt optimisé
-        prompt = """
+        prompt = """Tu es un expert en lecture de cartes d'embarquement.
 Analyse cette carte d'embarquement et extrait les informations.
-Réponds UNIQUEMENT avec un objet JSON valide, sans markdown :
 
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans explication.
+
+Format EXACT attendu :
 {
-  "flight_number": "numéro de vol (ex: BJ509)",
-  "departure_airport": "code IATA départ 3 lettres (ex: CDG)",
-  "arrival_airport": "code IATA arrivée 3 lettres (ex: DJE)",
-  "departure_date": "date au format DDMMM (ex: 16MAR)",
-  "departure_time": "heure HH:MM si visible",
-  "passenger_name": "nom du passager si visible"
+  "flight_number"    : "numéro de vol commence toujours par 'BJ' (ex: BJ509)",
+  "departure_airport": "code IATA départ 3 lettres MAJUSCULES (ex: CDG, TUN, DJE,IST)",
+  "arrival_airport"  : "code IATA arrivée 3 lettres MAJUSCULES (ex: CDG, TUN, DJE,IST)",
+  "departure_date"   : "date format DDMMM (ex: 16MAR, 01APR, 25DEC)",
+  "passenger_name"   : "NOM PRENOM en majuscules si visible" 
 }
+RÈGLES STRICTES :
+1. flight_number   → cherche "FLIGHT", "VOL"
+2. departure_airport → code IATA 3 lettres à GAUCHE du symbole ✈
+3. arrival_airport   → code IATA 3 lettres à DROITE du symbole ✈
+4. departure_airport et arrival_airport sont TOUJOURS différents !
+5. departure_date  → cherche format DDMMM (16MAR) ou DD/MM/YYYY → convertis en DDMMM
+6. passenger_name  → cherche en haut où vous trouvez MR ou Mrs et se touve toujours en majuscules,
+7. Si un champ n'est pas visible → laisse une chaîne vide ""
+8. Ne jamais inventer une valeur → vide si incertain
 
-Règles STRICTES :
-- departure_airport = ville/aéroport de DÉPART (d'où part l'avion)
-- arrival_airport = ville/aéroport d'ARRIVÉE (où arrive l'avion)
-- Les deux codes arrival_airport et departure_airport  sont TOUJOURS différents
-- Cherche les mots clés : Code IATA 3 lette majuscule entre une petit avion 
-- Si non visible = vide 
-  
-}
+Réponds UNIQUEMENT avec le JSON, rien d'autre."""
 
-Si un champ n'est pas visible, laisse vide .
-"""
+
+## Ce qui a été amélioré
+
 
         # Extraction
         start_time = time.time()

@@ -100,7 +100,7 @@ async def login(
         ).first()
         # SELECT * FROM departements WHERE id = ?
         if dept:
-            departement_nom = dept.nom.value
+            departement_nom = dept.nom
             # .value → "BAGAGE" pas NomDepartement.BAGAGE
 
     # ── ÉTAPE 5 : Générer le token JWT ────────────────────

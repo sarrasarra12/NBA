@@ -5,14 +5,18 @@ import Header from './Header'
 import { Plus, Trash2, Building2, Tag } from 'lucide-react'
 
 export default function Parametres() {
-  const [activeTab, setActiveTab]       = useState('departements')
-  const [departements, setDepartements] = useState([])
-  const [categories, setCategories]     = useState([])
-  const [showForm, setShowForm]         = useState(false)
-  const [popup, setPopup]               = useState({ show: false, type: '', message: '' })
+  const [activeTab, setActiveTab]         = useState('departements')
+  const [departements, setDepartements]   = useState([])
+  const [categories, setCategories]       = useState([])
+  const [showForm, setShowForm]           = useState(false)
+  const [popup, setPopup]                 = useState({ show: false, type: '', message: '' })
   const [confirmDialog, setConfirmDialog] = useState({ show: false, message: '', onConfirm: null })
-  const [deptForm, setDeptForm]         = useState({ nom: '', responsable: '', email: '', category_id: '' })
-  const [catForm, setCatForm]           = useState({ nom: '', description: '' })
+
+  // ← departement n'a plus category_id !
+  const [deptForm, setDeptForm] = useState({ nom: '', responsable: '', email: '' })
+
+  // ← catégorie choisit son département !
+  const [catForm, setCatForm]   = useState({ nom: '', description: '', departement_id: '' })
 
   const token = localStorage.getItem('token')
 
@@ -46,15 +50,21 @@ export default function Parametres() {
     fetchCategories()
   }, [])
 
+  // ── CRUD Département ───────────────────────────
   const handleCreateDept = async () => {
     const res = await fetch('http://localhost:8000/api/admin/departements', {
-      method: 'POST',
+      method : 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...deptForm, category_id: deptForm.category_id ? parseInt(deptForm.category_id) : null })
+      body   : JSON.stringify({
+        nom        : deptForm.nom,
+        responsable: deptForm.responsable,
+        email      : deptForm.email
+        // ← plus de category_id !
+      })
     })
     if (res.ok) {
       setShowForm(false)
-      setDeptForm({ nom: '', responsable: '', email: '', category_id: '' })
+      setDeptForm({ nom: '', responsable: '', email: '' })
       fetchDepartements()
       showPopup('success', 'Département créé !')
     } else {
@@ -64,23 +74,35 @@ export default function Parametres() {
 
   const handleSupprimerDept = (id) => {
     showConfirm('Supprimer ce département ?', async () => {
-      await fetch(`http://localhost:8000/api/admin/departements/${id}`, {
-        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`http://localhost:8000/api/admin/departements/${id}`, {
+        method : 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-      fetchDepartements()
-      showPopup('success', 'Département supprimé')
+      if (res.ok) {
+        fetchDepartements()
+        showPopup('success', 'Département supprimé')
+      } else {
+        const err = await res.json()
+        showPopup('error', err.detail || 'Erreur suppression')
+      }
     })
   }
 
+  // ── CRUD Catégorie ─────────────────────────────
   const handleCreateCat = async () => {
     const res = await fetch('http://localhost:8000/api/admin/categories', {
-      method: 'POST',
+      method : 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(catForm)
+      body   : JSON.stringify({
+        nom           : catForm.nom,
+        description   : catForm.description,
+        departement_id: catForm.departement_id ? parseInt(catForm.departement_id) : null
+        // ← catégorie choisit son département !
+      })
     })
     if (res.ok) {
       setShowForm(false)
-      setCatForm({ nom: '', description: '' })
+      setCatForm({ nom: '', description: '', departement_id: '' })
       fetchCategories()
       showPopup('success', 'Catégorie créée !')
     } else {
@@ -91,11 +113,17 @@ export default function Parametres() {
 
   const handleSupprimerCat = (id) => {
     showConfirm('Supprimer cette catégorie ?', async () => {
-      await fetch(`http://localhost:8000/api/admin/categories/${id}`, {
-        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`http://localhost:8000/api/admin/categories/${id}`, {
+        method : 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-      fetchCategories()
-      showPopup('success', 'Catégorie supprimée')
+      if (res.ok) {
+        fetchCategories()
+        showPopup('success', 'Catégorie supprimée')
+      } else {
+        const err = await res.json()
+        showPopup('error', err.detail || 'Erreur suppression')
+      }
     })
   }
 
@@ -131,8 +159,14 @@ export default function Parametres() {
               <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4">
                 <p className="font-semibold text-slate-800 mb-6 text-center">{confirmDialog.message}</p>
                 <div className="flex gap-3">
-                  <button onClick={() => setConfirmDialog({ show: false, message: '', onConfirm: null })} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl">Annuler</button>
-                  <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({ show: false, message: '', onConfirm: null }) }} className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-xl">Confirmer</button>
+                  <button
+                    onClick={() => setConfirmDialog({ show: false, message: '', onConfirm: null })}
+                    className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl"
+                  >Annuler</button>
+                  <button
+                    onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({ show: false, message: '', onConfirm: null }) }}
+                    className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-xl"
+                  >Confirmer</button>
                 </div>
               </div>
             </div>
@@ -146,17 +180,21 @@ export default function Parametres() {
                 const Icon = tab.icon
                 return (
                   <button key={tab.id} onClick={() => { setActiveTab(tab.id); setShowForm(false) }}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all
+                      ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
                     <Icon className="w-4 h-4"/>
                     {tab.label}
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{tab.count}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full
+                      ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      {tab.count}
+                    </span>
                   </button>
                 )
               })}
             </div>
 
-            {/* DÉPARTEMENTS */}
+            {/* ══ DÉPARTEMENTS ══════════════════════════ */}
             {activeTab === 'departements' && (
               <>
                 <div className="flex items-center justify-between mb-4">
@@ -170,13 +208,25 @@ export default function Parametres() {
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
                     <h3 className="font-bold text-slate-800 mb-4">Créer un département</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <input placeholder="Nom" value={deptForm.nom} onChange={e => setDeptForm({...deptForm, nom: e.target.value})} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"/>
-                      <input placeholder="Responsable" value={deptForm.responsable} onChange={e => setDeptForm({...deptForm, responsable: e.target.value})} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"/>
-                      <input placeholder="Email" type="email" value={deptForm.email} onChange={e => setDeptForm({...deptForm, email: e.target.value})} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"/>
-                      <select value={deptForm.category_id} onChange={e => setDeptForm({...deptForm, category_id: e.target.value})} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500">
-                        <option value="">Catégorie liée</option>
-                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.nom}</option>)}
-                      </select>
+                      <input
+                        placeholder="Nom (ex: OVERBOOKING_DEPT)"
+                        value={deptForm.nom}
+                        onChange={e => setDeptForm({...deptForm, nom: e.target.value.toUpperCase()})}
+                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      />
+                      <input
+                        placeholder="Responsable"
+                        value={deptForm.responsable}
+                        onChange={e => setDeptForm({...deptForm, responsable: e.target.value})}
+                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      />
+                      <input
+                        placeholder="Email département"
+                        type="email"
+                        value={deptForm.email}
+                        onChange={e => setDeptForm({...deptForm, email: e.target.value})}
+                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500 col-span-2"
+                      />
                     </div>
                     <div className="flex gap-3 mt-4">
                       <button onClick={handleCreateDept} className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl">Créer</button>
@@ -186,7 +236,9 @@ export default function Parametres() {
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {departements.map(dept => (
+                  {departements.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400 col-span-3">Aucun département</div>
+                  ) : departements.map(dept => (
                     <div key={dept.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-all">
                       <div className="flex items-start justify-between mb-3">
                         <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -199,18 +251,25 @@ export default function Parametres() {
                       <h3 className="font-bold text-slate-800 mb-1">{dept.nom}</h3>
                       {dept.responsable && <p className="text-xs text-slate-500 mb-1">👤 {dept.responsable}</p>}
                       {dept.email && <p className="text-xs text-slate-500 mb-2">✉️ {dept.email}</p>}
-                      {dept.category_id && (
-                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-700">
-                          {categories.find(c => c.id === dept.category_id)?.nom || 'Catégorie'}
-                        </span>
-                      )}
+
+                      {/* Catégories liées à ce département */}
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {categories
+                          .filter(c => c.departement_id === dept.id)
+                          .map(c => (
+                            <span key={c.id} className="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-700">
+                              {c.nom}
+                            </span>
+                          ))
+                        }
+                      </div>
                     </div>
                   ))}
                 </div>
               </>
             )}
 
-            {/* CATÉGORIES */}
+            {/* ══ CATÉGORIES ════════════════════════════ */}
             {activeTab === 'categories' && (
               <>
                 <div className="flex items-center justify-between mb-4">
@@ -224,8 +283,29 @@ export default function Parametres() {
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
                     <h3 className="font-bold text-slate-800 mb-4">Créer une catégorie</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <input placeholder="Nom (ex: OVERBOOKING)" value={catForm.nom} onChange={e => setCatForm({...catForm, nom: e.target.value.toUpperCase()})} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"/>
-                      <input placeholder="Description" value={catForm.description} onChange={e => setCatForm({...catForm, description: e.target.value})} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"/>
+                      <input
+                        placeholder="Nom (ex: OVERBOOKING)"
+                        value={catForm.nom}
+                        onChange={e => setCatForm({...catForm, nom: e.target.value.toUpperCase()})}
+                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      />
+                      <input
+                        placeholder="Description"
+                        value={catForm.description}
+                        onChange={e => setCatForm({...catForm, description: e.target.value})}
+                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+                      />
+                      {/* ← Catégorie choisit son département ! */}
+                      <select
+                        value={catForm.departement_id}
+                        onChange={e => setCatForm({...catForm, departement_id: e.target.value})}
+                        className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500 col-span-2"
+                      >
+                        <option value="">Choisir un département</option>
+                        {departements.map(dept => (
+                          <option key={dept.id} value={dept.id}>{dept.nom}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="flex gap-3 mt-4">
                       <button onClick={handleCreateCat} className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl">Créer</button>
@@ -235,7 +315,9 @@ export default function Parametres() {
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {categories.map(cat => (
+                  {categories.length === 0 ? (
+                    <div className="text-center py-20 text-slate-400 col-span-3">Aucune catégorie</div>
+                  ) : categories.map(cat => (
                     <div key={cat.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-all">
                       <div className="flex items-start justify-between mb-3">
                         <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -246,7 +328,14 @@ export default function Parametres() {
                         </button>
                       </div>
                       <h3 className="font-bold text-slate-800 mb-1">{cat.nom}</h3>
-                      {cat.description && <p className="text-xs text-slate-500">{cat.description}</p>}
+                      {cat.description && <p className="text-xs text-slate-500 mb-2">{cat.description}</p>}
+
+                      {/* Département lié */}
+                      {cat.departement_id && (
+                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                          🏢 {departements.find(d => d.id === cat.departement_id)?.nom || 'Département'}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -259,3 +348,22 @@ export default function Parametres() {
     </div>
   )
 }
+
+
+
+
+
+
+/*Formulaire département :
+✅ supprimé select catégorie
+✅ juste nom + responsable + email
+
+Formulaire catégorie :
+✅ ajouté select département
+✅ catégorie choisit son département
+
+Carte département :
+✅ affiche les catégories liées
+
+Carte catégorie :
+✅ affiche le département lié*/

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="margin: 0; padding: 0; background-color: #ffffff; font-family: Arial, sans-serif;">
+
+    <div style="max-width: 650px; background: white;">
+
+       
+
+        <!-- BODY -->
+        <div style="padding: 40px 35px; color: #333;">
+
+            <p style="font-size: 15px; margin: 0 0 15px 0;">
+                Bonjour <strong>{{ passenger_name }}</strong>,
+            </p>
+
+            <p style="font-size: 14px; color: #555; margin: 0 0 25px 0; line-height: 1.6;">
+                Votre réclamation <strong>#{{ reclamation_id }}</strong> a bien été traitée 
+                par notre équipe <strong>{{ departement }}</strong>.
+            </p>
+
+            <!-- Réponse -->
+            <div style="border-left: 3px solid #0066cc; padding: 15px 20px; background: #f8f9ff; margin: 0 0 30px 0; border-radius: 0 6px 6px 0;">
+                <p style="margin: 0; font-size: 14px; line-height: 1.8; color: #333; white-space: pre-line;">{{ reponse_contenu }}</p>
+            </div>
+
+           
+            <!-- Bouton aligné à gauche -->
+            <a href="{{ tracking_url }}"
+               style="background: #0A1628; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: bold; display: inline-block;">
+                Voir ma réclamation →
+            </a>
+
+            <!-- Signature -->
+            <p style="font-size: 13px; color: #999; margin: 35px 0 0 0; border-top: 1px solid #f0f0f0; padding-top: 20px;">
+                Cordialement,<br>
+                <strong style="color: #444;">{{ signature_departement }}</strong>
+            </p>
+
+        </div>
+
+        <!-- FOOTER -->
+        <div style="background: #f8f8f8; border-top: 1px solid #eee; padding: 25px 35px;">
+            <img src="https://i.imgur.com/hRKnF8M.png" alt="NouvelAir" style="width: 110px; margin-bottom: 10px; display: block;">
+            <p style="color: #aaa; font-size: 11px; margin: 0;">
+                NouvelAir Airlines · Aéroport Tunis-Carthage · Tunisie<br>
+                © 2025 NouvelAir. Tous droits réservés.
+            </p>
+        </div>
+
+    </div>
+
+</body>
+</html>

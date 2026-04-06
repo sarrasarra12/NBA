@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.file_storage import init_minio, upload_logo
+from app.services.file_storage import init_minio
 from app.routers import claims
 from contextlib import asynccontextmanager
 from app.services.ocr_service import init_ocr
@@ -19,7 +19,6 @@ from app.models.departement import Departement
 async def lifespan(app: FastAPI):
     # Initialisation de MinIO
     init_minio()
-    upload_logo()
     init_ocr()
     init_gemma()
     init_rag()   
