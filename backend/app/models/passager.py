@@ -23,7 +23,7 @@ class Passager(Base):
 
     # Relation vers réclamations
     reclamations = relationship("Reclamation", back_populates="passager")
-    feedbacks    = relationship("Feedback", back_populates="passager")  # ← ajoute ça
+  
 
 
     def __repr__(self):

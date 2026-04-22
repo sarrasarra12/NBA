@@ -1,7 +1,7 @@
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import ClaimPage from './components/ClaimPage'
 import TrackingPage from './components/TrackingPage'
 import LoginPage from './components/LoginPage'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Admin from './Dashboards/Admin'
 import AgBagage from './Dashboards/AgBagage'
 import Ag_callcenter   from './Dashboards/Ag_callcenter'
@@ -9,10 +9,17 @@ import AgService_client from './Dashboards/AgService_client'
 import GestionAgents from './Dashboards/GestionAgents'
 import ReclamationDetail from './Dashboards/ReclamationDetail'
 import Parametres from './Dashboards/Parametres'
-
-function App() {
+import FeedbackWidget from './components/FeedbackWidget'
+import MessagesPage from './components/MessagesPage'
+// ── Séparé dans un composant ENFANT ───────────.
+// useLocation doit être DANS BrowserRouter
+function AppContent() {
+  const location = useLocation()
+  const pagesPassager=['/','/suivi']
+  const showFeedback = pagesPassager.includes(location.pathname)
   return (
-    <BrowserRouter>
+    <>
+        {showFeedback && <FeedbackWidget />}
       <Routes>
         {/*<Route path="/" element={<Admin />} />*/}
         <Route path="/" element={<ClaimPage />} />
@@ -26,9 +33,18 @@ function App() {
         <Route path="/reclamation/:id" element={<ReclamationDetail />} />
         <Route path="/admin/stats" element={<Admin />} />
         <Route path="/admin/parametres" element={<Parametres />} />
+        <Route path="/messages" element={<MessagesPage />} />
+
       </Routes>
-    </BrowserRouter>
+      </>
   )
 }
 
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  )
+}
 export default App

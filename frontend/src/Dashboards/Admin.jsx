@@ -8,8 +8,11 @@ import {
 } from 'recharts'
 
 const COLORS_CAT  = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6B7280']
-const COLORS_PRIO = ['#EF4444', '#F59E0B', '#10B981']
-
+const COLORS_PRIO = {
+  'ELEVEE' : '#EF4444',  // rouge
+  'MOYENNE': '#F59E0B',  // orange
+  'NORMALE': '#10B981',  // vert
+}
 export default function Admin() {
 
   const navigate              = useNavigate()
@@ -18,6 +21,7 @@ export default function Admin() {
   const [periode, setPeriode] = useState('tout')
   const [loading, setLoading] = useState(true)
   const [reclamations, setReclamations] = useState([])
+  const [statsIA, setStatsIA] = useState(null)
 
   // ── Charger stats ──────────────────────────────
   useEffect(() => {
@@ -38,6 +42,14 @@ export default function Admin() {
     .then(res => res.json())
     .then(data => setReclamations(Array.isArray(data) ? data : []))
   }, [])
+  useEffect(() => {
+  fetch('http://localhost:8000/api/admin/stats/agent-ia', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  .then(res => res.json())
+  .then(data => setStatsIA(data))
+  .catch(err => console.error(err))
+}, [])
 
   // ── Formater données graphiques ────────────────
   const dataCat = stats ? Object.entries(stats.par_categorie).map(([name, value]) => ({
@@ -171,8 +183,8 @@ export default function Admin() {
                           <YAxis tick={{ fontSize: 12 }}/>
                           <Tooltip />
                           <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                            {dataPrio.map((_, i) => (
-                              <Cell key={i} fill={COLORS_PRIO[i % COLORS_PRIO.length]} />
+                            {dataPrio.map((entry, i) => (
+                              <Cell key={i} fill={COLORS_PRIO[entry.name] || '#6B7280'} />
                             ))}
                           </Bar>
                         </BarChart>
@@ -183,6 +195,141 @@ export default function Admin() {
                   </div>
 
                 </div>
+                {/* Ajouter ICI après les graphiques */}
+{statsIA && (
+  <div className="grid grid-cols-2 gap-6 mb-6">
+
+    {/* CARTE 1 — Utilisation IA */}
+    <div className="bg-white rounded-2xl border
+                    border-gray-200 shadow-sm p-6">
+
+      <p className="text-xs text-slate-500 font-medium
+                    uppercase tracking-wide mb-4">
+        Utilisation de l'agent IA
+      </p>
+
+      {/* Taux */}
+      <div className="flex items-end gap-2 mb-2">
+        <p className="text-4xl font-bold"
+          style={{
+            color: statsIA.carte1.taux_utilisation_ia >= 70
+              ? '#2ECC71'
+              : statsIA.carte1.taux_utilisation_ia >= 50
+                ? '#F39C12' : '#E74C3C'
+          }}>
+          {statsIA.carte1.taux_utilisation_ia}%
+        </p>
+        <p className="text-sm text-slate-400 mb-1">
+          des réclamations
+        </p>
+      </div>
+      <p className="text-xs text-slate-400 mb-4">
+        traitées par l'agent IA
+      </p>
+
+      {/* Barre progression */}
+      <div className="w-full bg-gray-100 rounded-full
+                      h-3 mb-4 overflow-hidden">
+        <div
+          className="h-3 rounded-full transition-all duration-500"
+          style={{
+            width: `${statsIA.carte1.taux_utilisation_ia}%`,
+            background: statsIA.carte1.taux_utilisation_ia >= 70
+              ? '#2ECC71'
+              : statsIA.carte1.taux_utilisation_ia >= 50
+                ? '#F39C12' : '#E74C3C'
+          }}
+        />
+      </div>
+
+      {/* 3 chiffres détail */}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="bg-blue-50 rounded-xl p-3">
+          <p className="text-xl font-bold text-blue-600">
+            {statsIA.carte1.total_ia}
+          </p>
+          <p className="text-xs text-slate-400">Réponses IA</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <p className="text-xl font-bold text-slate-600">
+            {statsIA.carte1.total_humaine}
+          </p>
+          <p className="text-xs text-slate-400">Manuelles</p>
+        </div>
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-xl font-bold text-slate-800">
+            {statsIA.carte1.total_reponses}
+          </p>
+          <p className="text-xs text-slate-400">Total</p>
+        </div>
+      </div>
+    </div>
+
+    {/* CARTE 2 — Satisfaction passagers */}
+    <div className="bg-white rounded-2xl border
+                    border-gray-200 shadow-sm p-6">
+
+      <p className="text-xs text-slate-500 font-medium
+                    uppercase tracking-wide mb-4">
+        Satisfaction passagers
+      </p>
+
+      {/* Smiley + Note */}
+      <div className="flex items-center gap-4 mb-4">
+        <span style={{ fontSize: "48px" }}>
+          {statsIA.carte2.note_moyenne_globale >= 4.5 ? "😄"
+            : statsIA.carte2.note_moyenne_globale >= 3.5 ? "🙂"
+            : statsIA.carte2.note_moyenne_globale >= 2.5 ? "😐"
+            : statsIA.carte2.note_moyenne_globale >= 1.5 ? "😕"
+            : "😡"}
+        </span>
+        <div>
+          <p className="text-4xl font-bold text-slate-800">
+            {statsIA.carte2.note_moyenne_globale}
+            <span className="text-lg text-slate-400 font-normal">
+              {" "}/ 5
+            </span>
+          </p>
+          <p className="text-xs text-slate-400">
+            {statsIA.carte2.total_feedbacks} avis passagers
+          </p>
+        </div>
+      </div>
+
+      {/* Distribution smileys */}
+      <div className="space-y-2">
+        {[5, 4, 3, 2, 1].map(note => {
+          const emojis = ["😡", "😕", "😐", "🙂", "😄"]
+          const count  = statsIA.carte2.distribution[String(note)] || 0
+          const pct    = statsIA.carte2.total_feedbacks > 0
+            ? Math.round(count / statsIA.carte2.total_feedbacks * 100)
+            : 0
+          const color  = note >= 4 ? '#2ECC71'
+            : note === 3 ? '#F39C12' : '#E74C3C'
+
+          return (
+            <div key={note} className="flex items-center gap-2">
+              <span style={{ fontSize:"16px", width:"20px" }}>
+                {emojis[note - 1]}
+              </span>
+              <div className="flex-1 bg-gray-100 rounded-full
+                              h-2 overflow-hidden">
+                <div
+                  className="h-2 rounded-full transition-all duration-500"
+                  style={{ width:`${pct}%`, background: color }}
+                />
+              </div>
+              <span className="text-xs text-slate-400 w-8 text-right">
+                {pct}%
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+
+  </div>
+)}
 
                 {/* ── LISTE RÉCLAMATIONS ─────────── */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">

@@ -14,6 +14,12 @@ from app.services.rag_service import init_rag
 from app.routers.agent_ia import router as agent_ia_router
 from app.models.category import Category
 from app.models.departement import Departement
+from app.routers import classifier_ia
+from app.routers import feedback
+from app.routers import messages
+
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,6 +55,10 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(agent_router)
 app.include_router(agent_ia_router)
+app.include_router(classifier_ia.router)
+app.include_router(feedback.router)
+app.include_router(messages.router)
+
 # Route racine (test)
 @app.get("/")
 def root():

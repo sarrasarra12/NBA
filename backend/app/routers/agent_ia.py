@@ -45,6 +45,6 @@ async def analyser_reclamation(
     return {
         "reclamation_id" : reclamation_id,
         "reponse_ia"     : result["reponse"],
-        "rules_used"     : result["rules_used"],
+        "rules_used"     : "",          
         "score_confiance": result["score_confiance"]
     }

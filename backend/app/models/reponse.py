@@ -25,4 +25,4 @@ class Reponse(Base):
     }
 
     # Relations
-    reclamation = relationship("Reclamation")
+    reclamation = relationship("Reclamation", back_populates="reponses")

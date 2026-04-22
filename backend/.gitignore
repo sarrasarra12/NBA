@@ -13,4 +13,4 @@ __pycache__/
 # Ignore tout MinIO
 ../minio/
 ../minio/data/
-../minio/data/.minio.sys/
+../minio/data/.minio.sys/"*.gguf" 

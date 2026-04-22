@@ -14,6 +14,9 @@ from app.schemas.auth import AgentCreate, AgentResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
+from app.models.reponse_ia      import ReponseIA
+from app.models.reponse_humaine import ReponseHumaine
+from app.models.feedback        import Feedback
 
 router = APIRouter(
     prefix="/api/admin",
@@ -253,4 +256,53 @@ async def get_stats(
         "periode"      : periode,
         "par_categorie": {cat: c for cat, c in par_categorie},
         "par_priorite" : {p.value: c for p, c in par_priorite},
+    }
+#-------------------------
+# Stat-ia
+
+#--------------------------
+@router.get("/stats/agent-ia")
+async def get_stats_agent_ia(
+    admin = Depends(admin_only),
+    db    : Session = Depends(get_db)
+):
+    # Compter réponses IA
+    total_ia      = db.query(ReponseIA).count()
+
+    # Compter réponses manuelles
+    total_humaine = db.query(ReponseHumaine).count()
+
+    # Total général
+    total = total_ia + total_humaine
+
+    # Calculer taux
+    taux_ia      = round(total_ia / total * 100, 1) if total > 0 else 0
+    taux_humaine = round(total_humaine / total * 100, 1) if total > 0 else 0
+
+    # Feedbacks passagers
+    feedbacks       = db.query(Feedback).all()
+    total_feedbacks = len(feedbacks)
+    note_moyenne    = round(
+        sum(f.note for f in feedbacks) / total_feedbacks, 2
+    ) if total_feedbacks > 0 else 0
+
+    # Distribution notes 1 à 5
+    distribution = {
+        str(i): sum(1 for f in feedbacks if f.note == i)
+        for i in range(1, 6)
+    }
+
+    return {
+        "carte1": {
+            "total_reponses"      : total,
+            "total_ia"            : total_ia,
+            "total_humaine"       : total_humaine,
+            "taux_utilisation_ia" : taux_ia,
+            "taux_humaine"        : taux_humaine,
+        },
+        "carte2": {
+            "note_moyenne_globale": note_moyenne,
+            "total_feedbacks"     : total_feedbacks,
+            "distribution"        : distribution
+        }
     }

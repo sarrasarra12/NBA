@@ -8,7 +8,7 @@ import AdminImg   from '../assets/img.jpg'
 import BagageImg  from '../assets/10777569.png'
 import CallImg    from '../assets/w.webp'
 import ServiceImg from '../assets/n.jpg'
-
+import { MessageSquare } from "lucide-react"
 import {
   LayoutDashboard, FileText, Users,
   Settings, AlertTriangle, LogOut, ChevronDown
@@ -16,56 +16,100 @@ import {
 
 const allMenuItems = [
   {
-    id: "dashboard",
-    icon: LayoutDashboard,
+    id   : "dashboard",
+    icon : LayoutDashboard,
     label: "Dashboard",
     roles: ["ADMIN", "AGENT"],
-    path: null  // dynamique selon rôle
+    path : null,
   },
   {
-    id: "reclamations",
-    icon: FileText,
-    label: "Réclamations",
-    roles: ["ADMIN", "AGENT"],
-    path: null  // dynamique selon rôle
+    id     : "reclamations",
+    icon   : FileText,
+    label  : "Réclamations",
+    roles  : ["ADMIN", "AGENT"],
+    path   : null,
+    submenu: [
+      { id: "nouvelle",   label: "Nouvelles",  statut: "NOUVELLE",   color: "bg-blue-500" , roles: ["AGENT"] },
+      { id: "en_analyse", label: "En analyse", statut: "EN_ANALYSE", color: "bg-yellow-500" , roles: ["AGENT"] },
+      { id: "cloturee",   label: "Clôturées",  statut: "CLOTURED",   color: "bg-green-500"  , roles: ["AGENT"] },
+    ]
   },
   {
-    id: "urgent",
-    icon: AlertTriangle,
+    id   : "urgent",
+    icon : AlertTriangle,
     label: "Urgentes",
-    roles: ["ADMIN", "AGENT"],
-    path: null,
-    badge: "2"
+    roles: ["AGENT"],
+    path : null,
   },
   {
-    id: "agents",
-    icon: Users,
+    id   : "agents",
+    icon : Users,
     label: "Agents",
     roles: ["ADMIN"],
-    path: "/admin/agents"  // ← gestion agents
+    path : "/admin/agents"
   },
   {
-    id: "parametres",
-    icon: Settings,
+    id   : "parametres",
+    icon : Settings,
     label: "Paramètres",
     roles: ["ADMIN"],
-    path: "/admin/parametres"  // ← gestion dept + catégories
+    path : "/admin/parametres"
   },
+  {
+  id   : "messages",
+  icon : MessageSquare,
+  label: "Messages",
+  roles: ["ADMIN", "AGENT"],
+  path : null,
+  badge: null  // ← dynamique
+},
 ]
 
 export default function Sidebar() {
 
   const navigate              = useNavigate()
   const [openSub, setOpenSub] = useState(null)
-
-  const [nom,  setNom]  = useState(localStorage.getItem('nom')         || 'Agent')
-  const [role, setRole] = useState(localStorage.getItem('role')        || 'AGENT')
-  const [dept, setDept] = useState(localStorage.getItem('departement') || '')
-
+  const [nom,     setNom]     = useState(localStorage.getItem('nom')         || 'Agent')
+  const [role,    setRole]    = useState(localStorage.getItem('role')        || 'AGENT')
+  const [dept,    setDept]    = useState(localStorage.getItem('departement') || '')
+  const [nbUrgentes, setNbUrgentes] = useState(0)
+  const [nbMessages, setNbMessages] = useState(0)
   useEffect(() => {
-    setNom(localStorage.getItem('nom')         || 'Agent')
-    setRole(localStorage.getItem('role')       || 'AGENT')
-    setDept(localStorage.getItem('departement')|| '')
+  const token = localStorage.getItem('token')
+  if (!token) return
+
+  fetch('http://localhost:8000/api/messages/non-lus', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  .then(res => res.json())
+  .then(data => setNbMessages(data.count))
+  .catch(() => {})
+}, [])
+  // ── Charger infos utilisateur ──────────────────
+  useEffect(() => {
+    setNom(localStorage.getItem('nom')          || 'Agent')
+    setRole(localStorage.getItem('role')        || 'AGENT')
+    setDept(localStorage.getItem('departement') || '')
+  }, [])
+
+  // ── Compter réclamations urgentes ──────────────
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    fetch('http://localhost:8000/api/agent/reclamations', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (Array.isArray(data)) {
+        const urgentes = data.filter(
+          r => r.priorite === 'ELEVEE' && r.statut === 'NOUVELLE'
+        )
+        setNbUrgentes(urgentes.length)
+      }
+    })
+    .catch(() => {})
   }, [])
 
   const getPanelLabel = () => {
@@ -101,32 +145,35 @@ export default function Sidebar() {
     navigate('/login')
   }
 
+  const handleSubClick = (sub) => {
+    navigate(`${getRoute()}?statut=${sub.statut}`)
+  }
+
   const handleClick = (item) => {
     if (item.submenu) {
       setOpenSub(openSub === item.id ? null : item.id)
       return
     }
-
+    if (item.id === 'messages') {
+      navigate('/messages')
+      return 
+}
     if (item.path) {
       navigate(item.path)
       return
     }
-
-    // Path null → dynamique
-    if (item.id === 'dashboard' || item.id === 'reclamations') {
-      navigate(getRoute())
-    }
+    if (item.id === 'dashboard')    navigate(getRoute())
+    if (item.id === 'reclamations') navigate(getRoute())
+    if (item.id === 'urgent')       navigate(`${getRoute()}?priorite=ELEVEE`)
   }
 
   return (
-    <div className="h-screen w-64 transition duration-300 ease-in-out bg-blue-200/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 flex flex-col relative z-10">
+    <div className="h-screen w-64 bg-blue-200/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 flex flex-col relative z-10">
 
-      {/* ── LOGO ─────────────────────────────────────── */}
+      {/* ── LOGO ──────────────────────────────────── */}
       <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden">
-            <img src={logoImg} alt="logo" className="w-10 h-10 rounded-xl"/>
-          </div>
+          <img src={logoImg} alt="logo" className="w-10 h-10 rounded-xl"/>
           <div>
             <h1 className="text-xl font-bold text-slate-800 dark:text-white">NouvelAir</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400">{getPanelLabel()}</p>
@@ -134,7 +181,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* ── NAVIGATION ───────────────────────────────── */}
+      {/* ── NAVIGATION ────────────────────────────── */}
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {menuItems.map((item) => (
           <div key={item.id}>
@@ -147,25 +194,34 @@ export default function Sidebar() {
                 <span className="text-sm font-medium">{item.label}</span>
               </div>
               <div className="flex items-center gap-2">
-                {item.badge && (
+                {/* Badge urgentes dynamique */}
+                {item.id === 'urgent' && nbUrgentes > 0 && (
                   <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                    {item.badge}
+                    {nbUrgentes}
                   </span>
                 )}
+                {item.id === 'messages' && nbMessages > 0 && (
+                <span className="bg-blue-500 text-white
+                                text-xs px-2 py-0.5 rounded-full">
+                  {nbMessages}
+                </span>
+              )}
                 {item.submenu && (
                   <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${openSub === item.id ? 'rotate-180' : ''}`}/>
                 )}
               </div>
             </button>
 
+            {/* ── Sous-menu ── */}
             {item.submenu && openSub === item.id && (
-              <div className="ml-8 mt-1 space-y-1">
+              <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-200/50 pl-4">
                 {item.submenu.map((sub) => (
                   <button
                     key={sub.id}
-                    onClick={() => navigate(sub.path)}
-                    className="w-full text-left px-3 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    onClick={() => handleSubClick(sub)}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 hover:bg-white/50 rounded-lg transition-colors"
                   >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sub.color}`}/>
                     {sub.label}
                   </button>
                 ))}
@@ -175,7 +231,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* ── LOGOUT ───────────────────────────────────── */}
+      {/* ── LOGOUT ────────────────────────────────── */}
       <div className="p-4 border-t border-slate-200/50 dark:border-slate-700/50">
         <div className="flex items-center space-x-3 p-3 rounded-xl bg-white/50 dark:bg-slate-800/50">
           <img src={getUserImg()} alt="user" className="w-10 h-10 rounded-full ring-2 ring-blue-500"/>
@@ -183,7 +239,10 @@ export default function Sidebar() {
             <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{nom}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{getPanelLabel()}</p>
           </div>
-          <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Déconnexion">
+          <button
+            onClick={handleLogout}
+            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+          >
             <LogOut className="w-4 h-4"/>
           </button>
         </div>

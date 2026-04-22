@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .env
 .vscode/
+backend/chroma_db/
+backend/uploads/
+*.gguf

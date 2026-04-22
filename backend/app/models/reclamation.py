@@ -41,7 +41,6 @@ class Reclamation(Base):
     departement         = relationship("Departement")#plusierus reclemation appartient a un  dept 
     carte_embarquement  = relationship("CarteEmbarquement", back_populates="reclamation", uselist=False)
     pieces_jointes      = relationship("PieceJointe", back_populates="reclamation")
-    feedback            = relationship("Feedback", back_populates="reclamation", uselist=False)
-
+    reponses = relationship("Reponse", back_populates="reclamation")
     def __repr__(self):
         return f"<Reclamation id={self.id} token={self.public_token} statut={self.statut}>"

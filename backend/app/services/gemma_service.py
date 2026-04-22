@@ -29,9 +29,10 @@ def extract_with_gemma(image_path: str) -> Dict:
     
     try:
         # Initialiser le modèle
-        model = genai.GenerativeModel('gemma-3-4b-it')
+        model = genai.GenerativeModel('gemma-4-26b-a4b-it')
         #gemma-3-4b-it
         #gemini-2.5-flash'
+        #gemma-4-27b-it
         
         
         # Charger l'image
