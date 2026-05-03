@@ -79,32 +79,27 @@ async def classify_reclamation(
         print(f"Prediction brute : {predicted}")
 
         # Catégories valides du système NouvelAir
-        categories_valides = [
-            "retard",
-            "bagage",
-            "annulation",
-            "remboursement",
-            "service_aeroport",
-            "autre"
-        ]
+        LABEL_MAPPING = {
+            "retard"           : "RETARD_VOL",
+            "bagage"           : "BAGAGE",
+            "annulation"       : "ANNULATION",
+            "remboursement"    : "REMBOURSEMENT",
+            "service_aeroport" : "SERVICE_AEROPORT",
+            "autre"            : "AUTRE"
+        }
 
-        # "autre" par défaut si rien trouvé
-        categorie_predite = "autre"
+        categorie_predite = "AUTRE"
 
-        # Chercher la catégorie dans la réponse
-        # "if cat in predicted" plus robuste
-        # que l'égalité exacte car le modèle
-        # peut retourner "annulation de vol"
-        # → "annulation" in "annulation de vol" = True
-        for cat in categories_valides:
+        for cat, label_officiel in LABEL_MAPPING.items():
             if cat in predicted:
-                categorie_predite = cat
-                break  # s'arrête à la 1ère trouvée
-
+                categorie_predite = label_officiel
+                break
         return {
             "success"           : True,
             "categorie_predite" : categorie_predite,
         }
+
+
 
     # Si Ollama est éteint ou erreur réseau
     # → on retourne "autre" sans erreur HTTP
@@ -114,5 +109,5 @@ async def classify_reclamation(
         print(f"Erreur classifier : {e}")
         return {
             "success"           : False,
-            "categorie_predite" : "autre",
+            "categorie_predite" : "AUTRE",
         }

@@ -6,120 +6,197 @@ OLLAMA_URL   = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "nouvelair"
 
 # ══════════════════════════════════════════════════════
-# INSTRUCTIONS PAR CATÉGORIE
-# Chaque instruction guide le modèle pour générer
-# une réponse professionnelle et complète
+# DÉTECTION DE LA LANGUE
 # ══════════════════════════════════════════════════════
-INSTRUCTIONS = {
+def detect_langue(text: str) -> str:
+    mots_anglais = ['flight', 'delayed', 'cancelled', 'luggage', 'baggage',
+                    'refund', 'compensation', 'ticket', 'booking', 'airport',
+                    'complaint', 'lost', 'damaged', 'would like', 'my flight']
+    mots_arabes  = ['رحلة', 'تأخير', 'حقيبة', 'الطائرة', 'مطار', 'تعويض',
+                    'إلغاء', 'أريد', 'السلام', 'طيران', 'تذكرة', 'استرداد']
+    text_lower = text.lower()
+    if any(m in text_lower for m in mots_anglais): return 'english'
+    if any(m in text           for m in mots_arabes):  return 'arabic'
+    return 'french'
 
-    # ── Retard de vol ──────────────────────────────────
-    "retard": """
-Contexte réglementaire : Règlement EU261/2004
-Instructions :
-1. Présenter les excuses sincères de NouvelAir
-2. Expliquer brièvement la cause du retard
-3. Si retard >= 2h : proposer rafraîchissements et repas
-4. Si retard >= 3h : informer le passager de son droit
-   à indemnisation selon EU261/2004 :
-   - Vol <= 1500 km      → 250 EUR
-   - Vol 1500 à 3500 km  → 400 EUR
-   - Vol > 3500 km       → 600 EUR
-5. Demander les coordonnées bancaires :
-   - Nom complet du titulaire
-   - IBAN
-   - BIC/SWIFT
-6. Préciser délai de traitement : 7 jours ouvrés
-""",
 
-    # ── Annulation de vol ──────────────────────────────
-    "annulation": """
-Contexte réglementaire : Règlement EU261/2004 
-Instructions :
-1. Présenter les excuses sincères de NouvelAir
-2. Expliquer brièvement la cause de l'annulation
-3. Proposer au passager le choix entre :
-   - Remboursement intégral du billet
-   - Réacheminement vers la destination finale
-4. Si remboursement choisi → demander :
-   - Nom complet du titulaire
-   - IBAN
-   - BIC/SWIFT
-5. Informer du droit à indemnisation :
-   - Vol <= 1500 km      → 250 EUR
-   - Vol 1500 à 3500 km  → 400 EUR
-   - Vol > 3500 km       → 600 EUR
-6. Préciser délai de traitement : 7 jours ouvrés
-""",
+# ══════════════════════════════════════════════════════
+# RÈGLES PAR CATÉGORIE — multilingue
+# ══════════════════════════════════════════════════════
+REGLES = {
+    "RETARD_VOL": {
+        "french" : """Règlement EU261/2004 :
+- Excuses sincères + expliquer brièvement la cause
+- Retard >= 2h → proposer repas et rafraîchissements
+- Retard >= 3h → compensation due :
+  • <= 1500 km → 250€  |  1500-3500 km → 400€  |  > 3500 km → 600€
+- Demander IBAN + BIC/SWIFT pour virement
+- Délai traitement : 7 jours ouvrés""",
 
-    # ── Bagage perdu / endommagé / retardé ─────────────
-    "bagage": """
-Contexte réglementaire : Convention de Montréal 
-Instructions :
-1. Présenter les excuses sincères de NouvelAir
-2. Demander les informations nécessaires :
-   - Référence PIR (Property Irregularity Report)
-   - Image du bagage si n'a pas déja enpoyé+ Description détaillée du bagage
-     (couleur, marque, contenu approximatif)
-   - Date et numéro du vol concerné
-3. Informer le passager de ses droits :
-   - Bagage perdu    → indemnisation max 1 288 DTS
-   - Bagage endommagé → indemnisation max 1 288 DTS
-   - Bagage retardé  → indemnisation max 1 288 DTS
-4. Si dédommagement applicable → demander :
-   - Nom complet du titulaire
-   - IBAN
-   - BIC/SWIFT
-5. Préciser délai de traitement : 21 jours ouvrés
-""",
+        "english": """EU Regulation 261/2004:
+- Sincere apologies + brief explanation of the delay
+- Delay >= 2h → offer meals and refreshments
+- Delay >= 3h → compensation due:
+  • <= 1500 km → €250  |  1500-3500 km → €400  |  > 3500 km → €600
+- Request IBAN + BIC/SWIFT for bank transfer
+- Processing time: 7 working days""",
 
-    # ── Remboursement ──────────────────────────────────
-    "remboursement": """
-Contexte réglementaire : Règlement EU261/2004 et Convention de Montréal
-Instructions :
-1. Présenter les excuses sincères de NouvelAir pour le retard du rembousement dans le cas d'un retard 
-2. Sinon Confirmer le droit au remboursement du passager
-3. Préciser la base légale applicable :
-   - EU261/2004 si retard ou annulation
-   - Convention de Montréal si problème bagage
-4. Demander les coordonnées bancaires :
-   - Nom complet du titulaire
-   - IBAN
-   - BIC/SWIFT
-   - Banque domiciliataire
-5. Préciser délai de traitement : 7 jours ouvrés
-6. Indiquer le montant estimé si applicable
-""",
+        "arabic" : """اللائحة الأوروبية EU261/2004:
+- اعتذار صادق + شرح موجز لسبب التأخير
+- تأخير >= 2 ساعة → تقديم وجبات ومرطبات
+- تأخير >= 3 ساعات → تعويض مستحق:
+  • <= 1500 كم → 250€  |  1500-3500 كم → 400€  |  > 3500 كم → 600€
+- طلب IBAN + BIC/SWIFT للتحويل البنكي
+- مدة المعالجة: 7 أيام عمل""",
+    },
 
-    # ── Service aéroport ───────────────────────────────
-    "service_aeroport": """
-Contexte réglementaire : Règlement EU261/2004 
-Instructions :
-1. Présenter les excuses sincères de NouvelAir
-2. Accuser réception de la réclamation
-3. Demander des détails supplémentaires :
-   - Date et numéro du vol
-   - Description précise de l'incident
-   - Nom des agents impliqués si disponible
-4. Si préjudice prouvé → informer du droit
-   à indemnisation selon EU261/2004
-5. Proposer un suivi personnalisé du dossier
-6. Communiquer les coordonnées du service client
-""",
+    "ANNULATION": {
+        "french" : """Règlement EU261/2004 :
+- Excuses sincères + expliquer brièvement la cause
+- Proposer AU CHOIX du passager (pas les deux) :
+  • Remboursement intégral du billet → demander IBAN + BIC/SWIFT
+  • OU réacheminement vers destination finale
+- Si annulation < 14 jours → compensation due :
+  • <= 1500 km → 250€  |  1500-3500 km → 400€  |  > 3500 km → 600€
+- Délai traitement : 7 jours ouvrés""",
 
-    # ── Autre ──────────────────────────────────────────
-    "autre": """
-Instructions :
-1. Présenter les excuses sincères de NouvelAir
-2. Accuser réception de la réclamation
-3. Demander des informations complémentaires
-   pour mieux traiter le dossier
-4. Proposer un suivi personnalisé
-5. Communiquer les coordonnées du service client
-   NouvelAir pour toute question supplémentaire
-"""
+        "english": """EU Regulation 261/2004:
+- Sincere apologies + brief explanation
+- Offer passenger a CHOICE (not both):
+  • Full refund → request IBAN + BIC/SWIFT
+  • OR re-routing to final destination
+- If cancellation < 14 days notice → compensation due:
+  • <= 1500 km → €250  |  1500-3500 km → €400  |  > 3500 km → €600
+- Processing time: 7 working days""",
+
+        "arabic" : """اللائحة الأوروبية EU261/2004:
+- اعتذار صادق + شرح موجز للسبب
+- تقديم خيار للمسافر (ليس الاثنين معاً):
+  • استرداد كامل → طلب IBAN + BIC/SWIFT
+  • أو إعادة التوجيه للوجهة النهائية
+- إلغاء < 14 يوم → تعويض مستحق:
+  • <= 1500 كم → 250€  |  1500-3500 كم → 400€  |  > 3500 كم → 600€
+- مدة المعالجة: 7 أيام عمل""",
+    },
+
+    "BAGAGE": {
+        "french" : """Convention de Montréal :
+- Excuses sincères
+- Demander : numéro PIR + description bagage + numéro de vol
+- Indemnisation maximale : 1 288 DTS (~1 500€)
+- Demander IBAN + BIC/SWIFT
+- Délai traitement : 21 jours ouvrés""",
+
+        "english": """Montreal Convention:
+- Sincere apologies
+- Request: PIR number + baggage description + flight number
+- Maximum compensation: 1,288 SDR (~€1,500)
+- Request IBAN + BIC/SWIFT
+- Processing time: 21 working days""",
+
+        "arabic" : """اتفاقية مونتريال:
+- اعتذار صادق
+- طلب: رقم PIR + وصف الحقيبة + رقم الرحلة
+- التعويض الأقصى: 1288 حق سحب خاص (~1500€)
+- طلب IBAN + BIC/SWIFT
+- مدة المعالجة: 21 يوم عمل""",
+    },
+
+    "REMBOURSEMENT": {
+        "french" : """- Excuses sincères + confirmer le droit au remboursement
+- Demander : IBAN + BIC/SWIFT + banque domiciliataire
+- Délai traitement : 7 jours ouvrés""",
+
+        "english": """- Sincere apologies + confirm right to refund
+- Request: IBAN + BIC/SWIFT + bank name
+- Processing time: 7 working days""",
+
+        "arabic" : """- اعتذار صادق + تأكيد حق المسافر في الاسترداد
+- طلب: IBAN + BIC/SWIFT + اسم البنك
+- مدة المعالجة: 7 أيام عمل""",
+    },
+
+    "SERVICE_AEROPORT": {
+        "french" : """- Excuses sincères
+- Demander : date + numéro vol + description précise de l'incident
+- Proposer un suivi personnalisé du dossier""",
+
+        "english": """- Sincere apologies
+- Request: date + flight number + precise description of the incident
+- Offer personalized follow-up""",
+
+        "arabic" : """- اعتذار صادق
+- طلب: التاريخ + رقم الرحلة + وصف دقيق للحادثة
+- تقديم متابعة شخصية للملف""",
+    },
+
+    "AUTRE": {
+        "french" : """- Excuses sincères
+- Accuser réception de la réclamation
+- Demander informations complémentaires si nécessaire
+- Proposer un suivi personnalisé""",
+
+        "english": """- Sincere apologies
+- Acknowledge receipt of the complaint
+- Request additional information if needed
+- Offer personalized follow-up""",
+
+        "arabic" : """- اعتذار صادق
+- الاعتراف باستلام الشكوى
+- طلب معلومات إضافية إذا لزم الأمر
+- تقديم متابعة شخصية""",
+    },
 }
 
 
+# ══════════════════════════════════════════════════════
+# CONSTRUCTION DU PROMPT
+# ══════════════════════════════════════════════════════
+def build_prompt(description, category, passager_nom, langue, regles):
+
+    cat_key = category.upper()
+    regle   = regles.get(cat_key, regles["AUTRE"]).get(langue, regles["AUTRE"]["french"])
+
+    if langue == 'english':
+        return f"""You are an AI assistant for NouvelAir airline. RESPOND IN ENGLISH ONLY.
+
+Passenger: {passager_nom}
+Complaint: {description}
+Category: {category}
+
+Rules to follow:
+{regle}
+
+Write a professional email response in English:"""
+
+    elif langue == 'arabic':
+        return f"""أنت مساعد ذكاء اصطناعي لشركة نوفيلير. يجب الرد باللغة العربية فقط.
+
+المسافر: {passager_nom}
+الشكوى: {description}
+الفئة: {category}
+
+القواعد الواجب اتباعها:
+{regle}
+
+اكتب رداً بريدياً احترافياً باللغة العربية:"""
+
+    else:
+        return f"""Tu es un assistant IA pour NouvelAir. RÉPONDS EN FRANÇAIS UNIQUEMENT.
+
+### Réclamation : {description}
+### Catégorie : {category}
+### Passager : {passager_nom}
+
+### Règles :
+{regle}
+
+### Réponse :"""
+
+
+# ══════════════════════════════════════════════════════
+# FONCTION PRINCIPALE
+# ══════════════════════════════════════════════════════
 def generate_ia_response(
     description  : str,
     category     : str,
@@ -127,36 +204,11 @@ def generate_ia_response(
 ) -> dict:
 
     try:
-        print(f"Appel Ollama — catégorie : {category}")
+        langue = detect_langue(description)
+        print(f"Appel Ollama — catégorie : {category} — langue : {langue}")
 
-        # ── Récupérer instruction selon catégorie ──────
-        instruction = INSTRUCTIONS.get(
-            category.lower(),
-            INSTRUCTIONS["autre"]
-        )
+        prompt = build_prompt(description, category, passager_nom, langue, REGLES)
 
-        # ── Construire le prompt enrichi ───────────────
-        prompt = f"""
-Tu es un assistant IA spécialisé dans le traitement des réclamations de la compagnie NouvelAir.
-
-RÈGLE CRITIQUE (OBLIGATOIRE) :
-- Tu DOIS répondre STRICTEMENT dans la même langue que la réclamation.
-- Si la réclamation est en arabe → réponse EN ARABE uniquement.
-- Si la réclamation est en anglais → réponse EN ANGLAIS uniquement.
-- Si la réclamation est en français → réponse EN FRANÇAIS uniquement.
-- Il est INTERDIT de changer de langue.
-
-### Réclamation : {description}
-### Catégorie : {category}
-### Passager : {passager_nom}
-
-### Instructions détaillées :
-{instruction}
-
-### Réponse :
-"""
-
-        # ── Appel Ollama ───────────────────────────────
         response = requests.post(
             OLLAMA_URL,
             json={
@@ -169,11 +221,11 @@ RÈGLE CRITIQUE (OBLIGATOIRE) :
                     "num_predict"   : 500,
                 }
             },
-            timeout = 120
+            timeout=120
         )
 
         reponse_text = response.json()["response"].strip()
-        print(f"Réponse générée avec succès !")
+        print(f"Réponse générée — langue : {langue}")
 
         return {
             "success"        : True,

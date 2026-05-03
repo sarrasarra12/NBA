@@ -1,87 +1,93 @@
-// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // ClaimPage.jsx — Formulaire de soumission de réclamation
-// Fonctionnalités :
-// → OCR carte d'embarquement
-// → Vérification PNR
-// → Classification IA via Mistral fine-tuné
-// → Soumission réclamation
-// ══════════════════════════════════════════════════
+//
+// Fonctionnalités principales :
+// → OCR carte d'embarquement via Gemma 4 VLM
+// → Vérification PNR via réservation
+// → Classification IA via Mistral 7B fine-tuné (Ollama)
+// → Suggestion de catégorie avec correction automatique
+// → Soumission multipart (fichiers + données texte)
+// ══════════════════════════════════════════════════════════════
 
-// ── IMPORTS ────────────────────────────────────────
+// ── IMPORTS ────────────────────────────────────────────────────
 import { Link } from "react-router-dom";
 import heroImg from "../assets/avion.jpg";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 
-// ── DONNÉES STATIQUES ──────────────────────────────
+// ── DONNÉES STATIQUES ──────────────────────────────────────────
 
 // Liste des pays avec indicatifs téléphoniques
+// Utilisé pour le sélecteur de téléphone international
 const countries = [
-  { code: "+216", flag: "🇹🇳", name: "Tunisie" },
-  { code: "+33",  flag: "🇫🇷", name: "France" },
-  { code: "+49",  flag: "🇩🇪", name: "Allemagne" },
-  { code: "+39",  flag: "🇮🇹", name: "Italie" },
-  { code: "+34",  flag: "🇪🇸", name: "Espagne" },
-  { code: "+32",  flag: "🇧🇪", name: "Belgique" },
-  { code: "+41",  flag: "🇨🇭", name: "Suisse" },
-  { code: "+44",  flag: "🇬🇧", name: "Royaume-Uni" },
-  { code: "+31",  flag: "🇳🇱", name: "Pays-Bas" },
-  { code: "+212", flag: "🇲🇦", name: "Maroc" },
-  { code: "+213", flag: "🇩🇿", name: "Algérie" },
-  { code: "+218", flag: "🇱🇾", name: "Libye" },
+  { code: "+216", flag: "🇹🇳", name: "Tunisie"       },
+  { code: "+33",  flag: "🇫🇷", name: "France"        },
+  { code: "+49",  flag: "🇩🇪", name: "Allemagne"     },
+  { code: "+39",  flag: "🇮🇹", name: "Italie"        },
+  { code: "+34",  flag: "🇪🇸", name: "Espagne"       },
+  { code: "+32",  flag: "🇧🇪", name: "Belgique"      },
+  { code: "+41",  flag: "🇨🇭", name: "Suisse"        },
+  { code: "+44",  flag: "🇬🇧", name: "Royaume-Uni"   },
+  { code: "+31",  flag: "🇳🇱", name: "Pays-Bas"      },
+  { code: "+212", flag: "🇲🇦", name: "Maroc"         },
+  { code: "+213", flag: "🇩🇿", name: "Algérie"       },
+  { code: "+218", flag: "🇱🇾", name: "Libye"         },
 ];
 
 // Types de contact possibles
+// Le passager peut soumettre pour lui-même ou via un tiers
 const contactTypes = [
-  { value: "passager",  label: "Passager" },
-  { value: "avocat",    label: "Avocat" },
-  { value: "association", label: "Association" },
-  { value: "agence",    label: "Agence de voyage" },
+  { value: "passager",    label: "Passager"          },
+  { value: "avocat",      label: "Avocat"            },
+  { value: "association", label: "Association"       },
+  { value: "agence",      label: "Agence de voyage"  },
 ];
 
-// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
-// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
 export default function ClaimPage() {
   const navigate = useNavigate();
 
-  // ── ÉTATS — Fichiers ───────────────────────────
-  const [file, setFile]             = useState(null);        // carte d'embarquement
-  const [attachments, setAttachments] = useState([]);        // pièces jointes
+  // ── ÉTATS — Fichiers ────────────────────────────────────────
+  const [file, setFile]               = useState(null);  // carte d'embarquement uploadée
+  const [attachments, setAttachments] = useState([]);    // pièces jointes additionnelles
 
-  // ── ÉTATS — Formulaire ─────────────────────────
+  // ── ÉTATS — Formulaire ──────────────────────────────────────
   const [selectedCountry, setSelectedCountry] = useState(countries[0]); // indicatif téléphone
-  const [typeContact, setTypeContact]         = useState("");            // type de contact
-  const [liéAuVol, setLiéAuVol]               = useState(null);         // oui/non lié à un vol
-  const [categories, setCategories]           = useState([])            // catégories depuis API
-  const [pnrError, setPnrError]               = useState('');           // erreur PNR
+  const [typeContact,     setTypeContact]     = useState("");            // passager/avocat/...
+  const [liéAuVol,        setLiéAuVol]        = useState(null);         // true=oui, false=non, null=pas encore choisi
+  const [categories,      setCategories]      = useState([]);           // catégories chargées depuis l'API
+  const [pnrError,        setPnrError]        = useState('');           // message d'erreur PNR
 
-  // ── ÉTATS — Caméra ─────────────────────────────
+  // ── ÉTATS — Caméra ──────────────────────────────────────────
   const [showCamera, setShowCamera] = useState(false);
-  const videoRef  = useRef(null);   // référence à l'élément video
-  const canvasRef = useRef(null);   // référence au canvas pour capturer la photo
+  const videoRef  = useRef(null);   // référence DOM à l'élément <video>
+  const canvasRef = useRef(null);   // référence DOM au <canvas> caché pour capturer la photo
 
-  // ── ÉTATS — Notification popup ─────────────────
+  // ── ÉTATS — Notification popup ──────────────────────────────
   // type : 'success' | 'error' | 'warning' | 'info'
+  // Affichage temporaire en bas à droite de l'écran
   const [popup, setPopup] = useState({ show: false, type: '', message: '' })
 
-  // ── ÉTATS — Classification IA ──────────────────
-  // categoriePredite : catégorie prédite par Mistral fine-tuné
-  const [categoriePredite, setCategoriePredite]   = useState('')
-  // showSuggestion : afficher/cacher le bloc de suggestion IA
-  const [showSuggestion, setShowSuggestion]       = useState(false)
-  // loadingClassifier : true pendant qu'Ollama analyse la description
-  const [loadingClassifier, setLoadingClassifier] = useState(false)
+  // ── ÉTATS — Classification IA ───────────────────────────────
+  // categoriePredite  : résultat de Mistral 7B fine-tuné
+  // showSuggestion    : afficher/cacher le bloc de suggestion
+  // loadingClassifier : spinner pendant l'appel à Ollama
+  const [categoriePredite,   setCategoriePredite]   = useState('')
+  const [showSuggestion,     setShowSuggestion]     = useState(false)
+  const [loadingClassifier,  setLoadingClassifier]  = useState(false)
 
-  // ── ÉTATS — Progression formulaire ────────────
-  // Indique si chaque section est complétée (pour affichage visuel)
+  // ── ÉTATS — Progression visuelle ───────────────────────────
+  // Bordure verte quand tous les champs d'une section sont remplis
   const [completed, setCompleted] = useState({
     vol        : false,
     reclamation: false,
   });
 
-  // ── ÉTAT — Données du formulaire ───────────────
+  // ── ÉTAT — Données du formulaire ────────────────────────────
+  // Objet unique pour tous les champs texte du formulaire
   const [formData, setFormData] = useState({
     passenger_name   : "",
     email            : "",
@@ -96,11 +102,13 @@ export default function ClaimPage() {
     pnr_code         : "",
   });
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // CHARGEMENT INITIAL — Catégories depuis l'API
-  // Appelé une seule fois au montage du composant
-  // [] = tableau vide = pas de dépendances = une seule fois
-  // ══════════════════════════════════════════════════
+  //
+  // useEffect avec [] = s'exécute UNE SEULE FOIS au montage
+  // Charge les catégories disponibles pour le select
+  // Ex: BAGAGE, RETARD, ANNULATION, REMBOURSEMENT...
+  // ══════════════════════════════════════════════════════════════
   useEffect(() => {
     fetch('http://localhost:8000/api/claims/categories')
       .then(res => res.json())
@@ -108,60 +116,72 @@ export default function ClaimPage() {
       .catch(err => console.error('Erreur categories:', err))
   }, [])
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // POPUP NOTIFICATION
-  // Affiche un message pendant 4 secondes puis disparaît
+  //
+  // Affiche un message coloré pendant 4 secondes
   // setTimeout → disparition automatique après 4000ms
-  // ══════════════════════════════════════════════════
+  // type 'success' → vert | 'error' → rouge | 'warning' → jaune
+  // ══════════════════════════════════════════════════════════════
   const showPopup = (type, message) => {
     setPopup({ show: true, type, message })
     setTimeout(() => setPopup({ show: false, type: '', message: '' }), 4000)
   }
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // GESTION DES CHAMPS DU FORMULAIRE
-  // Spread operator : copie tous les champs existants
-  // et écrase seulement le champ modifié
-  // [e.target.name] : clé dynamique selon le champ
-  // ══════════════════════════════════════════════════
+  //
+  // Spread operator {...formData} : copie tous les champs existants
+  // [e.target.name] : clé dynamique — modifie seulement le champ ciblé
+  // Ex: name="email" → met à jour formData.email
+  // ══════════════════════════════════════════════════════════════
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // GESTION FICHIER CARTE D'EMBARQUEMENT
-  // Déclenche l'extraction OCR automatiquement
-  // ══════════════════════════════════════════════════
+  //
+  // Dès qu'un fichier est sélectionné :
+  // → On le stocke dans l'état file
+  // → On lance immédiatement l'extraction OCR
+  //   sans attendre que le passager clique sur un bouton
+  // ══════════════════════════════════════════════════════════════
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       setFile(selectedFile);
-      extractBoardingPassData(selectedFile); // lancer OCR immédiatement
+      extractBoardingPassData(selectedFile); // OCR automatique
     }
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // GESTION PIÈCES JOINTES
-  // Array.from : convertit FileList en tableau JavaScript
-  // prev : état précédent (pattern fonctionnel React)
-  // [...prev, ...newFiles] : fusion des anciens et nouveaux fichiers
-  // ══════════════════════════════════════════════════
+  //
+  // Array.from : convertit FileList (objet DOM) en tableau JS
+  // Pattern fonctionnel : prev → état précédent garanti par React
+  // [...prev, ...newFiles] : fusion sans écraser les fichiers existants
+  // ══════════════════════════════════════════════════════════════
   const handleAttachments = (e) => {
     const newFiles = Array.from(e.target.files);
     setAttachments((prev) => [...prev, ...newFiles]);
   };
 
-  // Supprimer une pièce jointe par son index
+  // Supprimer une pièce jointe par son index dans le tableau
   const removeAttachment = (index) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // CONVERSION DATE OCR → FORMAT INPUT HTML
-  // OCR retourne : "15APR" → on convertit en "2025-04-15"
-  // slice(0,2) : extraire les 2 premiers caractères (jour)
-  // slice(2,5) : extraire du 3ème au 5ème caractère (mois)
-  // ══════════════════════════════════════════════════
+  //
+  // L'OCR retourne la date au format IATA : "15APR"
+  // L'input HTML type="date" attend : "2026-04-15"
+  //
+  // slice(0,2) : "15" → jour
+  // slice(2,5) : "APR" → mois en lettres
+  // months[monthStr] : "APR" → "04"
+  // ══════════════════════════════════════════════════════════════
   const convertOcrDateToInput = (ocrDate) => {
     const months = {
       JAN: "01", FEB: "02", MAR: "03", APR: "04",
@@ -172,22 +192,26 @@ export default function ClaimPage() {
     const day      = ocrDate.slice(0, 2);
     const monthStr = ocrDate.slice(2, 5).toUpperCase();
     const month    = months[monthStr] || "01";
-    const year     = 2025;
+    const year     = 2026;
     return `${year}-${month}-${day}`;
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // EXTRACTION OCR CARTE D'EMBARQUEMENT
-  // Envoie le fichier au backend qui utilise Tesseract
-  // pour extraire automatiquement les infos du vol
-  // FormData : format multipart pour envoyer des fichiers
-  // ══════════════════════════════════════════════════
+  //
+  // Envoie l'image au backend → Gemma 4 VLM analyse
+  // Retour : numéro de vol, aéroports, date, nom passager
+  //
+  // FormData multipart : obligatoire pour envoyer des fichiers
+  // || prev.field : garder l'ancienne valeur si OCR échoue
+  //                 sur ce champ précis
+  // ══════════════════════════════════════════════════════════════
   const extractBoardingPassData = async (uploadedFile) => {
     if (!uploadedFile) return;
     try {
       const formData = new FormData();
       formData.append('file', uploadedFile);
-      showPopup('info', 'Analyse en cours, veuillez patienter...')
+      showPopup('info', 'Analyse de la carte en cours, veuillez patienter...')
 
       const response = await fetch(
         'http://localhost:8000/api/claims/extract-boarding-pass',
@@ -196,8 +220,8 @@ export default function ClaimPage() {
       const data = await response.json();
 
       if (data.success) {
-        // Mettre à jour seulement les champs extraits
-        // || prev.field : garder l'ancienne valeur si OCR échoue
+        // Mettre à jour seulement les champs extraits avec succès
+        // Si OCR échoue sur un champ → garder la valeur précédente
         setFormData(prev => ({
           ...prev,
           flight_number    : data.flight_number     || prev.flight_number,
@@ -206,28 +230,31 @@ export default function ClaimPage() {
           departure_date   : convertOcrDateToInput(data.departure_date) || prev.departure_date,
           passenger_name   : data.passenger_name    || prev.passenger_name
         }));
-        showPopup('success', 'Carte d\'embarquement analysée avec succès !')
-        // setTimeout : laisser le temps à React de mettre à jour le state
+        showPopup('success', "Carte d'embarquement analysée avec succès !")
+
+        // setTimeout 100ms : laisser React mettre à jour le state
         // avant de vérifier si la section est complétée
         setTimeout(() => {
           checkVolCompleted();
           checkReclamationCompleted();
         }, 100);
       } else {
-        showPopup('warning', 'Extraction partielle. Vérifiez les champs.')
+        showPopup('warning', 'Extraction partielle. Vérifiez les champs manuellement.')
       }
     } catch (error) {
       console.error('Erreur extraction:', error);
-      showPopup('error', 'Erreur lors de l\'analyse de la carte')
+      showPopup('error', "Erreur lors de l'analyse de la carte")
     }
   };
 
-  // ══════════════════════════════════════════════════
-  // GESTION CAMÉRA
+  // ══════════════════════════════════════════════════════════════
+  // OUVERTURE CAMÉRA
+  //
   // facingMode: 'environment' → caméra arrière sur mobile
-  // setTimeout : attendre que le DOM soit prêt
-  //              avant d'assigner le stream au video
-  // ══════════════════════════════════════════════════
+  // ideal: 1920x1080 → meilleure qualité pour l'OCR
+  // setTimeout 100ms : attendre que React rende le <video>
+  //                    avant d'assigner le stream
+  // ══════════════════════════════════════════════════════════════
   const openCamera = async () => {
     setShowCamera(true);
     try {
@@ -242,24 +269,27 @@ export default function ClaimPage() {
         if (videoRef.current) videoRef.current.srcObject = stream;
       }, 100);
     } catch (err) {
-      showPopup('error', 'Impossible d\'accéder à la caméra')
+      showPopup('error', "Impossible d'accéder à la caméra")
       setShowCamera(false);
     }
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // CAPTURE PHOTO DEPUIS LA CAMÉRA
-  // canvas : élément HTML pour dessiner l'image
-  // drawImage : copier le frame vidéo sur le canvas
-  // toBlob : convertir le canvas en fichier image
-  // 0.95 : qualité JPEG 95%
-  // ══════════════════════════════════════════════════
+  //
+  // canvas.width/height : adapter à la résolution réelle de la vidéo
+  // drawImage : copier le frame actuel de la vidéo sur le canvas
+  // toBlob : convertir le canvas en fichier binaire
+  //   → "image/jpeg" : format de compression
+  //   → 0.95 : qualité 95% (bon équilibre qualité/taille)
+  // getTracks().stop() : libérer la caméra (important !)
+  //                      sinon le voyant reste allumé
+  // ══════════════════════════════════════════════════════════════
   const capturePhoto = () => {
     const canvas = canvasRef.current;
     const video  = videoRef.current;
     if (!canvas || !video) return;
 
-    // Adapter la taille du canvas à la résolution vidéo
     canvas.width  = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0);
@@ -271,9 +301,9 @@ export default function ClaimPage() {
         { type: "image/jpeg" }
       );
       setFile(capturedFile);
-      extractBoardingPassData(capturedFile);
+      extractBoardingPassData(capturedFile); // OCR sur la photo capturée
 
-      // Arrêter le stream caméra pour libérer la ressource
+      // Libérer la caméra immédiatement
       if (video.srcObject) {
         video.srcObject.getTracks().forEach((track) => track.stop());
       }
@@ -281,7 +311,7 @@ export default function ClaimPage() {
     }, "image/jpeg", 0.95);
   };
 
-  // Fermer la caméra et libérer la ressource
+  // Fermer la caméra et libérer la ressource système
   const closeCamera = () => {
     if (videoRef.current?.srcObject) {
       videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
@@ -289,11 +319,12 @@ export default function ClaimPage() {
     setShowCamera(false);
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // VÉRIFICATION COMPLÉTION DES SECTIONS
-  // Utilisé pour l'affichage visuel (bordure verte)
-  // Vérifie que tous les champs obligatoires sont remplis
-  // ══════════════════════════════════════════════════
+  //
+  // Utilisé pour l'affichage visuel : bordure verte si complété
+  // && : tous les champs doivent être non-vides (truthy)
+  // ══════════════════════════════════════════════════════════════
   const checkVolCompleted = () => {
     if (
       formData.flight_number     &&
@@ -321,24 +352,26 @@ export default function ClaimPage() {
     }
   };
 
-  // ══════════════════════════════════════════════════
-  // CLASSIFICATION IA — Vérification catégorie
-  // Appelle notre modèle Mistral 7B fine-tuné via Ollama
-  // pour vérifier si la catégorie choisie par le passager
-  // correspond à sa description
+  // ══════════════════════════════════════════════════════════════
+  // CLASSIFICATION IA — Suggestion de catégorie
+  //
+  // Appelle Mistral 7B fine-tuné via Ollama
+  // Déclenchée par onBlur sur le champ description
+  // (pas à chaque frappe pour éviter trop d'appels)
   //
   // Conditions d'activation :
-  // 1. Description >= 30 caractères (assez de contexte)
-  // 2. Catégorie déjà choisie (sinon rien à comparer)
+  // 1. description >= 30 caractères (assez de contexte)
+  // 2. category déjà choisie (sinon rien à comparer)
   //
-  // finally : s'exécute toujours (succès ou erreur)
-  // → garantit que le spinner disparaît
-  // ══════════════════════════════════════════════════
+  // Si catégorie prédite ≠ catégorie choisie → afficher suggestion
+  // Si identiques → pas de suggestion nécessaire
+  //
+  // finally : s'exécute TOUJOURS (succès ou erreur)
+  //           garantit l'arrêt du spinner dans tous les cas
+  // ══════════════════════════════════════════════════════════════
   const classifierDescription = async (description) => {
-    // Pas assez de texte pour classifier correctement
-    if (description.length < 30) return
-    // Pas de catégorie choisie → rien à comparer
-    if (!formData.category) return
+    if (description.length < 30) return  // pas assez de texte
+    if (!formData.category) return       // pas de catégorie choisie
 
     setLoadingClassifier(true)
     try {
@@ -355,39 +388,37 @@ export default function ClaimPage() {
       if (data.success) {
         setCategoriePredite(data.categorie_predite)
 
-        // Afficher suggestion seulement si différent du choix passager
-        // Comparaison insensible à la casse avec toLowerCase()
+        // Comparer insensible à la casse avec toLowerCase()
+        // "REMBOURSEMENT" === "remboursement" → identique → pas de suggestion
         if (formData.category.toLowerCase() !== data.categorie_predite.toLowerCase()) {
-          setShowSuggestion(true)
+          setShowSuggestion(true)  // catégories différentes → afficher suggestion
         } else {
-          // Catégories identiques → pas de suggestion nécessaire
-          setShowSuggestion(false)
+          setShowSuggestion(false) // catégories identiques → cacher suggestion
         }
       }
     } catch (e) {
-      // Ollama éteint ou erreur réseau
-      // → on ignore silencieusement
-      // → le formulaire continue normalement
+      // Ollama éteint ou erreur réseau → ignorer silencieusement
+      // Le formulaire continue normalement sans suggestion IA
       console.error('Erreur classifier:', e)
     } finally {
-      // Toujours arrêter le spinner
-      // même si erreur
-      setLoadingClassifier(false)
+      setLoadingClassifier(false) // toujours arrêter le spinner
     }
   }
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // SOUMISSION DU FORMULAIRE
-  // FormData multipart : nécessaire pour envoyer
-  // des fichiers avec les données texte
-  // pnr_code.toUpperCase() : normaliser le PNR
-  // ══════════════════════════════════════════════════
+  //
+  // FormData multipart : obligatoire pour envoyer fichiers + texte
+  // pnr_code.toUpperCase() : normaliser le PNR (ex: "abc123" → "ABC123")
+  // forEach : envoyer plusieurs pièces jointes avec le même nom "pieces"
+  // ══════════════════════════════════════════════════════════════
   const handleSubmit = async () => {
     const data = new FormData();
+
+    // Champs obligatoires
     data.append("passenger_name",    formData.passenger_name);
     data.append("email",             formData.email);
-    // Concaténer indicatif + numéro
-    data.append("telephone",         `${selectedCountry.code} ${formData.telephone}`);
+    data.append("telephone",         `${selectedCountry.code} ${formData.telephone}`); // concaténer indicatif + numéro
     data.append("description",       formData.description);
     data.append("flight_number",     formData.flight_number);
     data.append("category",          formData.category);
@@ -432,8 +463,7 @@ export default function ClaimPage() {
         setCategoriePredite('');
 
       } else if (result.detail?.alert) {
-        // Erreur PNR spécifique
-        setPnrError(result.detail.alert)
+        setPnrError(result.detail.alert) // erreur PNR spécifique
       } else {
         setPnrError("Une erreur est survenue. Veuillez réessayer.")
       }
@@ -442,15 +472,16 @@ export default function ClaimPage() {
     }
   };
 
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   // RENDU JSX
-  // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════
   return (
     <div className="min-h-screen bg-gray-50">
 
-      {/* ── POPUP NOTIFICATION ───────────────────────
-          Position fixe en bas à droite
-          Apparaît par dessus tout le contenu (z-50)   */}
+      {/* ── POPUP NOTIFICATION ─────────────────────────────────
+          Position fixe en bas à droite (z-50 = par dessus tout)
+          4 types : success / error / warning / info
+          Disparaît automatiquement après 4 secondes           */}
       {popup.show && (
         <div className={`fixed bottom-6 right-6 z-50 max-w-sm w-full shadow-xl rounded-2xl p-4 flex items-start gap-3 transition-all
           ${popup.type === 'success' ? 'bg-green-50 border-2 border-green-300'   : ''}
@@ -481,9 +512,9 @@ export default function ClaimPage() {
 
       <Navbar />
 
-      {/* ── HERO ─────────────────────────────────────
-          Image de fond avec opacité réduite (opacity-20)
-          pour garder le texte lisible               */}
+      {/* ── HERO SECTION ───────────────────────────────────────
+          Image de fond avec opacity-20 pour garder le texte
+          lisible tout en ayant une image d'ambiance            */}
       <div className="relative bg-[#0A1628] px-4 sm:px-6 md:px-10 py-10 md:py-14 overflow-hidden">
         <img
           src={heroImg}
@@ -503,11 +534,15 @@ export default function ClaimPage() {
         </div>
       </div>
 
-      {/* ── FORMULAIRE PRINCIPAL ──────────────────── */}
+      {/* ── FORMULAIRE PRINCIPAL ──────────────────────────────── */}
       <div className="max-w-3xl mx-auto px-4 py-6 sm:py-8 md:py-10 space-y-4 sm:space-y-6">
 
-        {/* ── SECTION 1 : Question vol ──────────────
-            Conditionne l'affichage des sections suivantes */}
+        {/* ── SECTION 1 : Question vol ───────────────────────────
+            Point d'entrée du formulaire
+            Conditionne l'affichage des sections suivantes
+            liéAuVol = true  → afficher sections vol + réclamation
+            liéAuVol = false → afficher seulement section réclamation
+            liéAuVol = null  → rien d'autre n'est affiché             */}
         <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-4 sm:p-6">
           <p className="text-sm font-bold text-[#0A1628] mb-4">
             Votre réclamation est-elle liée à un vol particulier ?
@@ -527,7 +562,7 @@ export default function ClaimPage() {
                     : "border-gray-200 text-gray-500 hover:border-blue-300"
                   }`}
               >
-                {/* Radio button personnalisé */}
+                {/* Radio button personnalisé avec CSS */}
                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center
                   ${liéAuVol === option.value ? "border-blue-500" : "border-gray-300"}`}>
                   {liéAuVol === option.value && (
@@ -540,7 +575,9 @@ export default function ClaimPage() {
           </div>
         </div>
 
-        {/* ── SECTION 2 : Suivi réclamation existante ── */}
+        {/* ── SECTION 2 : Suivi réclamation existante ────────────
+            Toujours visible pour rediriger vers la page de suivi
+            Gradient bleu pour se démarquer visuellement          */}
         <div className="bg-gradient-to-br from-blue-200 to-blue-200 rounded-2xl shadow-xl p-6 text-blue-700 hover:shadow-2xl transition-all">
           {/* Version desktop */}
           <div className="hidden sm:flex items-center justify-between gap-6">
@@ -561,7 +598,6 @@ export default function ClaimPage() {
               <span className="text-xl">→</span>
             </Link>
           </div>
-
           {/* Version mobile */}
           <div className="sm:hidden text-center">
             <div className="flex justify-center mb-4">
@@ -581,8 +617,10 @@ export default function ClaimPage() {
           </div>
         </div>
 
-        {/* ── SECTION 3 : Carte d'embarquement ─────────
-            Affichée seulement si lié à un vol (liéAuVol === true) */}
+        {/* ── SECTION 3 : Carte d'embarquement ──────────────────
+            Affichée SEULEMENT si liéAuVol === true
+            Propose 2 méthodes : upload fichier ou caméra
+            L'OCR se déclenche automatiquement après upload/capture */}
         {liéAuVol === true && (
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm overflow-hidden">
             <div className="bg-blue-50 px-4 sm:px-6 md:px-8 py-4 md:py-5 border-b border-gray-200 flex items-center gap-3 sm:gap-4">
@@ -592,16 +630,15 @@ export default function ClaimPage() {
                 <p className="text-xs sm:text-sm text-gray-500">L'IA extrait les infos automatiquement</p>
               </div>
             </div>
-
             <div className="p-4 sm:p-6 md:p-8">
               <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-bold px-3 py-1.5 rounded-full mb-4 sm:mb-6">
-                🤖 Extraction automatique
+                🤖 Extraction automatique via Gemma 4
               </div>
 
-              {/* Affichage conditionnel : upload ou confirmation */}
+              {/* Affichage conditionnel : options upload OU confirmation */}
               {!file ? (
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Option 1 : importer un fichier */}
+                  {/* Option 1 : importer depuis l'appareil */}
                   <label className="block border-2 border-dashed border-blue-200 rounded-2xl p-6 text-center bg-blue-50 cursor-pointer hover:border-blue-500 hover:bg-blue-100 transition-all">
                     <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-md">📁</div>
                     <h3 className="text-sm font-bold text-[#0A1628] mb-1">Importer</h3>
@@ -610,7 +647,7 @@ export default function ClaimPage() {
                     <input type="file" className="hidden" accept=".jpg,.jpeg,.png,.pdf" onChange={handleFileChange} />
                   </label>
 
-                  {/* Option 2 : scanner avec caméra */}
+                  {/* Option 2 : scanner avec la caméra du mobile */}
                   <button
                     type="button"
                     onClick={openCamera}
@@ -623,7 +660,7 @@ export default function ClaimPage() {
                   </button>
                 </div>
               ) : (
-                /* Fichier sélectionné → afficher confirmation */
+                /* Fichier sélectionné → afficher nom + taille + bouton supprimer */
                 <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -639,9 +676,10 @@ export default function ClaimPage() {
               )}
             </div>
 
-            {/* ── MODAL CAMÉRA ──────────────────────────
-                Position fixe sur tout l'écran (inset-0)
-                z-50 : par dessus tout le contenu        */}
+            {/* ── MODAL CAMÉRA ───────────────────────────────────
+                Overlay plein écran (fixed inset-0)
+                z-50 : par dessus tout le contenu de la page
+                Le guide en pointillés aide le passager à cadrer  */}
             {showCamera && (
               <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl">
@@ -661,7 +699,7 @@ export default function ClaimPage() {
                         </ul>
                       </div>
                     </div>
-                    {/* Élément vidéo pour l'aperçu caméra */}
+                    {/* Élément vidéo — srcObject assigné par openCamera() */}
                     <div className="relative bg-black rounded-xl overflow-hidden mb-4">
                       <video
                         ref={videoRef}
@@ -671,13 +709,13 @@ export default function ClaimPage() {
                         className="w-full h-auto"
                         style={{ maxHeight: '400px', objectFit: 'contain' }}
                       />
-                      {/* Guide visuel de cadrage */}
+                      {/* Guide visuel de cadrage en pointillés */}
                       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                         <div className="border-4 border-white border-dashed rounded-lg opacity-50"
                           style={{ width: '80%', height: '60%' }} />
                       </div>
                     </div>
-                    {/* Canvas caché pour capturer la photo */}
+                    {/* Canvas caché utilisé uniquement pour la capture */}
                     <canvas ref={canvasRef} className="hidden" />
                     <div className="flex gap-3">
                       <button onClick={closeCamera} className="flex-1 bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-semibold hover:bg-gray-200 transition">Annuler</button>
@@ -690,9 +728,10 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* ── SECTION 4 : Informations du vol ──────────
-            Affichée seulement si lié à un vol
-            Bordure verte si tous les champs sont remplis */}
+        {/* ── SECTION 4 : Informations du vol ───────────────────
+            Affichée SEULEMENT si liéAuVol === true
+            Les champs sont pré-remplis par l'OCR
+            Bordure verte = completed.vol = tous champs remplis  */}
         {liéAuVol === true && (
           <div className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all
             ${completed.vol ? "border-green-400" : "border-gray-200"}`}>
@@ -709,15 +748,15 @@ export default function ClaimPage() {
               </div>
             </div>
 
-            {/* Champs du vol générés dynamiquement */}
+            {/* Champs générés dynamiquement depuis un tableau de config */}
             <div className="p-4 sm:p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
               {[
-                { label: "Numéro de vol",      name: "flight_number",     placeholder: "Ex: BJ509", required: true  },
-                { label: "Date du vol",         name: "departure_date",    type: "date",             required: true  },
-                { label: "Aéroport de départ",  name: "departure_airport", placeholder: "Ex: CDG",   required: true  },
-                { label: "Aéroport d'arrivée",  name: "arrival_airport",   placeholder: "Ex: DJE",   required: true  },
-                { label: "PNR",                 name: "pnr_code",          placeholder: "Ex: 6BDDF5L", required: true },
-                { label: "Réf PIR",             name: "pir_ref",           placeholder: "Optionnel", required: false }
+                { label: "Numéro de vol",      name: "flight_number",     placeholder: "Ex: BJ509",    required: true  },
+                { label: "Date du vol",         name: "departure_date",    type: "date",                required: true  },
+                { label: "Aéroport de départ",  name: "departure_airport", placeholder: "Ex: CDG",      required: true  },
+                { label: "Aéroport d'arrivée",  name: "arrival_airport",   placeholder: "Ex: DJE",      required: true  },
+                { label: "PNR",                 name: "pnr_code",          placeholder: "Ex: 6BDDF5L",  required: true  },
+                { label: "Réf PIR",             name: "pir_ref",           placeholder: "Optionnel",    required: false }
               ].map((field) => (
                 <div key={field.name}>
                   <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
@@ -728,7 +767,7 @@ export default function ClaimPage() {
                     name={field.name}
                     value={formData[field.name]}
                     onChange={handleChange}
-                    onBlur={checkVolCompleted}
+                    onBlur={checkVolCompleted} // vérifier complétion quand on quitte le champ
                     placeholder={field.placeholder}
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-50 transition-all"
                   />
@@ -738,10 +777,10 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* ── SECTION 5 : Réclamation ───────────────────
-            Affichée si liéAuVol est défini (oui ou non)
-            Contient : type contact, nom, email, tel,
-                       catégorie, description + classification IA */}
+        {/* ── SECTION 5 : Réclamation ────────────────────────────
+            Affichée si liéAuVol !== null (oui OU non)
+            Contient : type contact, identité, catégorie,
+            description + classification IA + pièces jointes      */}
         {liéAuVol !== null && (
           <div className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all
             ${completed.reclamation ? "border-green-400" : "border-gray-200"}`}>
@@ -760,7 +799,7 @@ export default function ClaimPage() {
 
             <div className="p-4 sm:p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
 
-              {/* TYPE CONTACT */}
+              {/* TYPE CONTACT — pleine largeur */}
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
                   Vous êtes <span className="text-red-500">*</span>
@@ -769,9 +808,7 @@ export default function ClaimPage() {
                   value={typeContact}
                   onChange={(e) => {
                     setTypeContact(e.target.value);
-                    // setTimeout : attendre que le state soit mis à jour
-                    // avant de vérifier la complétion
-                    setTimeout(checkReclamationCompleted, 0);
+                    setTimeout(checkReclamationCompleted, 0); // vérifier après mise à jour du state
                   }}
                   className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-50 transition-all"
                 >
@@ -782,9 +819,9 @@ export default function ClaimPage() {
                 </select>
               </div>
 
-              {/* NOM + EMAIL */}
+              {/* NOM COMPLET + EMAIL */}
               {[
-                { label: "Nom complet", name: "passenger_name", placeholder: "Votre nom et prénom" },
+                { label: "Nom complet", name: "passenger_name", placeholder: "Votre nom et prénom"  },
                 { label: "Email",       name: "email",          placeholder: "votre@email.com", type: "email" },
               ].map((field) => (
                 <div key={field.name} className="col-span-1">
@@ -803,14 +840,15 @@ export default function ClaimPage() {
                 </div>
               ))}
 
-              {/* TÉLÉPHONE + CATÉGORIE */}
+              {/* TÉLÉPHONE + CATÉGORIE — grille imbriquée */}
               <div className="col-span-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                {/* Téléphone avec sélecteur d'indicatif */}
+                {/* Téléphone avec sélecteur d'indicatif international */}
                 <div>
                   <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
                     Téléphone <span className="text-red-500">*</span>
                   </label>
+                  {/* focus-within : applique le style quand n'importe quel enfant est focalisé */}
                   <div className="flex border-2 border-gray-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-50 transition-all">
                     <select
                       value={selectedCountry.code}
@@ -835,7 +873,7 @@ export default function ClaimPage() {
                   </div>
                 </div>
 
-                {/* Catégorie chargée depuis l'API */}
+                {/* Catégorie chargée depuis l'API au montage */}
                 <div>
                   <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
                     Catégorie <span className="text-red-500">*</span>
@@ -845,9 +883,7 @@ export default function ClaimPage() {
                     value={formData.category}
                     onChange={(e) => {
                       handleChange(e)
-                      // Réinitialiser la suggestion si le passager
-                      // change manuellement sa catégorie
-                      setShowSuggestion(false)
+                      setShowSuggestion(false) // cacher suggestion si changement manuel
                     }}
                     onBlur={checkReclamationCompleted}
                     className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-50 transition-all"
@@ -860,10 +896,10 @@ export default function ClaimPage() {
                 </div>
               </div>
 
-              {/* ── DESCRIPTION + CLASSIFICATION IA ────────
-                  onBlur : déclenché quand le passager
-                  quitte le champ (pas à chaque frappe)
-                  → évite trop d'appels à Ollama          */}
+              {/* ── DESCRIPTION + SUGGESTION IA ──────────────────
+                  onBlur : déclenché quand le passager QUITTE le champ
+                  → évite trop d'appels Ollama (pas à chaque frappe)
+                  → meilleur UX + performance                        */}
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-2">
                   Description <span className="text-red-500">*</span>
@@ -874,9 +910,7 @@ export default function ClaimPage() {
                   onChange    = {handleChange}
                   onBlur      = {(e) => {
                     checkReclamationCompleted()
-                    // Lancer la classification IA quand
-                    // le passager quitte le champ description
-                    classifierDescription(e.target.value)
+                    classifierDescription(e.target.value) // lancer classification IA
                   }}
                   placeholder = "Décrivez votre problème en détail..."
                   rows        = {4}
@@ -891,19 +925,26 @@ export default function ClaimPage() {
                   </p>
                 )}
 
-                {/* Bloc suggestion IA
-                    Affiché seulement si :
-                    - showSuggestion = true
-                    - loadingClassifier = false (analyse terminée) */}
+                {/* ── BLOC SUGGESTION IA ─────────────────────────
+                    Conditions d'affichage :
+                    1. showSuggestion = true
+                    2. loadingClassifier = false (analyse terminée)
+
+                    Bouton "Accepter" :
+                    → Cherche la vraie valeur dans categories[]
+                    → Comparaison insensible à la casse
+                    → Met à jour le select automatiquement ← FIX !
+                    → Affiche confirmation visuelle
+
+                    Bouton "Garder mon choix" :
+                    → Cache la suggestion sans modifier la catégorie */}
                 {showSuggestion && !loadingClassifier && (
                   <div className="mt-3 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <span>🤖</span>
                       <p className="text-yellow-800 text-sm font-medium">
                         Notre IA suggère la catégorie :
-                        <strong className="ml-1 uppercase">
-                          {categoriePredite}
-                        </strong>
+                        <strong className="ml-1 uppercase">{categoriePredite}</strong>
                       </p>
                     </div>
                     <p className="text-yellow-700 text-xs mb-3">
@@ -912,25 +953,35 @@ export default function ClaimPage() {
                       semble différente de votre description.
                     </p>
                     <div className="flex gap-2">
-                      {/* Bouton accepter : met à jour la catégorie
-                          avec la suggestion de l'IA              */}
+
+                      {/* Bouton accepter la suggestion IA */}
                       <button
                         type    = "button"
                         onClick = {() => {
+                          // ── FIX : Chercher la vraie valeur dans categories[]
+                          // Problème : categoriePredite = "remboursement" (minuscules)
+                          // Mais le select attend "REMBOURSEMENT" (majuscules)
+                          // Solution : trouver la valeur exacte avec find() insensible à la casse
+                          const categorieReelle = categories.find(
+                            cat => cat.nom.toLowerCase() === categoriePredite.toLowerCase()
+                          )
+
+                          // Mettre à jour avec la vraie valeur du select
+                          // → le select se met à jour visuellement ✅
                           setFormData(prev => ({
                             ...prev,
-                            category: categoriePredite
+                            category: categorieReelle ? categorieReelle.nom : categoriePredite
                           }))
+
                           setShowSuggestion(false)
-                          showPopup('success',
-                            `Catégorie mise à jour : ${categoriePredite}`)
+                          showPopup('success', `✅ Catégorie mise à jour : ${categoriePredite.toUpperCase()}`)
                         }}
                         className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-yellow-600 transition"
                       >
                         ✅ Accepter la suggestion
                       </button>
 
-                      {/* Bouton refuser : garder le choix original */}
+                      {/* Bouton garder le choix original */}
                       <button
                         type    = "button"
                         onClick = {() => setShowSuggestion(false)}
@@ -943,7 +994,9 @@ export default function ClaimPage() {
                 )}
               </div>
 
-              {/* ── PIÈCES JOINTES ─────────────────────── */}
+              {/* ── PIÈCES JOINTES ───────────────────────────────
+                  multiple : permettre plusieurs fichiers à la fois
+                  [...prev, ...newFiles] : cumuler sans écraser      */}
               <div className="col-span-1 sm:col-span-2">
                 <label className="block text-xs font-bold text-[#0A1628] uppercase tracking-wide mb-3">
                   Pièces jointes
@@ -970,7 +1023,7 @@ export default function ClaimPage() {
                       ))}
                     </div>
                   )}
-                  {/* Bouton ajout fichier */}
+                  {/* Bouton ajout fichier — label déclenche l'input caché */}
                   <label className="flex items-center justify-center gap-2 cursor-pointer">
                     <span className="inline-flex items-center gap-2 border-2 border-blue-200 text-blue-600 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold hover:bg-blue-50 transition-all">
                       📎 Ajouter un fichier
@@ -992,9 +1045,9 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* ── ERREUR PNR ───────────────────────────────
-            Affichée si le PNR est invalide ou ne
-            correspond pas au numéro de vol           */}
+        {/* ── ERREUR PNR ──────────────────────────────────────────
+            Affichée si le backend retourne une erreur PNR
+            Ex: "PNR introuvable" ou "PNR ne correspond pas au vol"  */}
         {pnrError && (
           <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-4 flex items-start gap-3">
             <span className="text-red-500 text-xl">⚠️</span>
@@ -1009,8 +1062,9 @@ export default function ClaimPage() {
           </div>
         )}
 
-        {/* ── BOUTONS SOUMISSION ───────────────────────
-            Affichés dès que liéAuVol est défini       */}
+        {/* ── BOUTONS SOUMISSION ──────────────────────────────────
+            Affichés dès que liéAuVol est défini (true ou false)
+            order-2 / order-1 : inverser l'ordre sur mobile       */}
         {liéAuVol !== null && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:justify-between mb-4 sm:mb-5">

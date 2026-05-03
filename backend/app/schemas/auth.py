@@ -37,7 +37,12 @@ class AgentCreate(BaseModel):
     password: str
     departement: Optional[str] = None
     # BAGAGE, CALL_CENTRE, SERVICE_CLIENT ou None pour ADMIN
-
+#schema pour le département
+class DepartementInfo(BaseModel):
+    id  : int
+    nom : str
+    class Config:
+        from_attributes = True
 # Données retournées pour un agent
 class AgentResponse(BaseModel):
     id: int
@@ -45,8 +50,10 @@ class AgentResponse(BaseModel):
     prenom: str
     email: str
     role: str
-    departement_id: Optional[int] = None
+    departement  : Optional[DepartementInfo] = None  
     is_active: bool
 
     class Config:
         from_attributes = True
+
+

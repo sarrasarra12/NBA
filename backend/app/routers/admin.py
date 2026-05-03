@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from app.models.reponse_ia      import ReponseIA
 from app.models.reponse_humaine import ReponseHumaine
 from app.models.feedback        import Feedback
-
+from app.core.dependencies import get_current_agent
 router = APIRouter(
     prefix="/api/admin",
     tags=["Admin"]
@@ -306,3 +306,44 @@ async def get_stats_agent_ia(
             "distribution"        : distribution
         }
     }
+# ══════════════════════════════════════════
+# PUT /api/admin/agents/{id}/activer
+# Réactiver un agent désactivé
+# ══════════════════════════════════════════
+@router.put("/agents/{id}/activer")
+async def activer_agent(
+    id    : int,
+    db    : Session = Depends(get_db),
+    agent : AgentHumain = Depends(get_current_agent)
+):
+    agent_db = db.query(AgentHumain).filter(
+        AgentHumain.id == id
+    ).first()
+
+    if not agent_db:
+        raise HTTPException(
+            status_code = 404,
+            detail      = "Agent introuvable"
+        )
+
+    # Passer is_active à True
+    agent_db.is_active = True
+    db.commit()
+
+    return { "success": True, "message": "Agent réactivé" }
+
+# détails sur chaque agents 
+@router.put("/agents/{agent_id}/password")
+async def change_agent_password(
+    agent_id : int,
+    data     : dict,
+    admin    = Depends(admin_only),
+    db       : Session = Depends(get_db)
+):
+    agent = db.query(AgentHumain).filter(AgentHumain.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent non trouvé")
+    
+    agent.mot_de_passe = hash_password(data["new_password"])
+    db.commit()
+    return {"message": "Mot de passe modifié avec succès"}

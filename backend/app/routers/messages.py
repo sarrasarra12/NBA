@@ -14,7 +14,6 @@ router = APIRouter(
 )
 
 class MessageRequest(BaseModel):
-    destinataire_id : int
     contenu         : str
 
 # ══════════════════════════════════════════
@@ -99,7 +98,32 @@ async def get_non_lus(
     ).count()
 
     return { "count": count }
+# ══════════════════════════════════════════
+# GET /api/messages/sent — Messages envoyés
+# ══════════════════════════════════════════
+@router.get("/sent")
+async def get_sent(
+    agent : AgentHumain = Depends(get_current_agent),
+    db    : Session = Depends(get_db)
+):
+    messages = db.query(Message).filter(
+        Message.expediteur_id == agent.id
+    ).order_by(Message.created_at.desc()).all()
 
+    return [
+        {
+            "id"          : m.id,
+            "contenu"     : m.contenu,
+            "created_at"  : m.created_at.isoformat(),
+            "destinataire": {
+                "id"    : m.destinataire.id,
+                "nom"   : m.destinataire.nom,
+                "prenom": m.destinataire.prenom,
+                "role"  : m.destinataire.role.value
+            }
+        }
+        for m in messages
+    ]
 # ══════════════════════════════════════════
 # PUT /api/messages/{id}/lu — Marquer lu
 # ══════════════════════════════════════════
@@ -147,3 +171,67 @@ async def get_agents(
         }
         for a in agents
     ]
+# ══════════════════════════════════════════
+# DELETE /api/messages/{id}
+# Supprimer un message envoyé
+# ══════════════════════════════════════════
+@router.delete("/{id}")
+async def supprimer_message(
+    id    : int,
+    agent : AgentHumain = Depends(get_current_agent),
+    db    : Session = Depends(get_db)
+):
+    message = db.query(Message).filter(
+        Message.id            == id,
+        Message.expediteur_id == agent.id  # ← seulement ses propres messages
+    ).first()
+
+    if not message:
+        raise HTTPException(
+            status_code = 404,
+            detail      = "Message introuvable"
+        )
+
+    db.delete(message)
+    db.commit()
+
+    return { "success": True, "message": "Message supprimé" }
+
+
+# ══════════════════════════════════════════
+# POST /api/messages/broadcast
+# Envoyer à tous les agents
+# ══════════════════════════════════════════
+@router.post("/broadcast")
+async def broadcast_message(
+    data  : MessageRequest,
+    agent : AgentHumain = Depends(get_current_agent),
+    db    : Session = Depends(get_db)
+):
+    # Récupérer tous les agents sauf l'expéditeur
+    tous_agents = db.query(AgentHumain).filter(
+        AgentHumain.id        != agent.id,
+        AgentHumain.is_active == True
+    ).all()
+
+    if not tous_agents:
+        raise HTTPException(
+            status_code = 404,
+            detail      = "Aucun agent disponible"
+        )
+
+    # Créer un message pour chaque agent
+    for destinataire in tous_agents:
+        message = Message(
+            expediteur_id   = agent.id,
+            destinataire_id = destinataire.id,
+            contenu         = data.contenu
+        )
+        db.add(message)
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Message envoyé à {len(tous_agents)} agent(s)"
+    }
