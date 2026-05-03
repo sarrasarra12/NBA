@@ -3,5 +3,5 @@ WORKDIR /app
 COPY requirements_render.txt .
 RUN pip install --no-cache-dir -r requirements_render.txt
 COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+EXPOSE 10000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
