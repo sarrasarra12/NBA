@@ -19,18 +19,31 @@ from app.routers import feedback
 from app.routers import messages
 
 
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialisation de MinIO
-    init_minio()
-    init_ocr()
-    init_gemma()
-    init_rag()   
+    # ── Services locaux — ignorés si indisponibles sur Render ──
+    try:
+        init_minio()
+    except Exception as e:
+        print(f"⚠️ MinIO non disponible : {e}")
+    try:
+        init_ocr()
+    except Exception as e:
+        print(f"⚠️ OCR non disponible : {e}")
+    try:
+        init_gemma()
+    except Exception as e:
+        print(f"⚠️ Gemma non disponible : {e}")
+    try:
+        init_rag()
+    except Exception as e:
+        print(f"⚠️ RAG non disponible : {e}")
+
+    # ── Seeds — toujours exécutés ──
     seed_categories_and_departements()
     seed_admin()
     yield
+
 
 # Créer l'application FastAPI
 app = FastAPI(
@@ -40,16 +53,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuration CORS
+# ── CORS — accepte localhost ET Vercel ──
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173","http://localhost:5174"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-#Router Claims
+# ── Routers ──
 app.include_router(claims.router)
 app.include_router(auth_router)
 app.include_router(admin_router)
@@ -59,7 +72,7 @@ app.include_router(classifier_ia.router)
 app.include_router(feedback.router)
 app.include_router(messages.router)
 
-# Route racine (test)
+
 @app.get("/")
 def root():
     return {
@@ -68,7 +81,7 @@ def root():
         "status": "OK"
     }
 
-# Route health check
+
 @app.get("/health")
 def health():
     return {
